@@ -14,6 +14,7 @@ const BUDGET_ITEMS = [
     { value: '일용임금',           label: '일용임금' },
     { value: '일용직부담금',       label: '일용직부담금' },
     { value: '장학금',             label: '장학금' },
+    { value: '포상금',             label: '포상금' },
 ];
 
 // <select> 옵션 HTML 생성 헬퍼
@@ -35,6 +36,7 @@ const BUDGET_ITEM_COLORS = {
     '일용임금':           { color: '#65a30d', bg: '#f7fee7' },
     '일용직부담금':       { color: '#ea580c', bg: '#fff7ed' },
     '장학금':             { color: '#0f766e', bg: '#f0fdfa' },
+    '포상금':             { color: '#be185d', bg: '#fdf2f8' },
 };
 
 function budgetItemBadge(itemName) {
