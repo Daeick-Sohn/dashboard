@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>비교과센터 업무 대시보드</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family:'Noto Sans KR',sans-serif;
+            min-height:100vh;
+            background:linear-gradient(135deg,#0f2544 0%,#1a3a5c 40%,#1e5fa8 100%);
+            display:flex; align-items:center; justify-content:center;
+            padding:20px;
+        }
+        .card {
+            background:white; border-radius:24px;
+            max-width:480px; width:100%;
+            box-shadow:0 30px 80px rgba(0,0,0,0.35);
+            overflow:hidden;
+        }
+        .card-header {
+            background:linear-gradient(135deg,#1a3a5c,#1e5fa8);
+            padding:36px 36px 28px; text-align:center; color:white;
+        }
+        .logo-icon {
+            width:72px; height:72px; background:rgba(255,255,255,0.15);
+            border-radius:20px; margin:0 auto 16px;
+            display:flex; align-items:center; justify-content:center;
+            font-size:32px; border:2px solid rgba(255,255,255,0.2);
+        }
+        .card-header h1 { font-size:22px; font-weight:800; margin-bottom:6px; }
+        .card-header p  { font-size:13px; color:rgba(255,255,255,0.7); line-height:1.6; }
+
+        .card-body { padding:32px 36px; }
+
+        /* 안내 메시지 */
+        .guide-box {
+            background:#f0f6ff; border:1.5px solid #bfdbfe;
+            border-radius:12px; padding:16px 18px; margin-bottom:24px;
+            display:flex; gap:12px; align-items:flex-start;
+        }
+        .guide-box i { color:#2563eb; font-size:18px; margin-top:2px; flex-shrink:0; }
+        .guide-box p { font-size:13px; color:#1e40af; line-height:1.7; }
+        .guide-box strong { color:#1a3a5c; }
+
+        /* URL 입력 섹션 */
+        .direct-section h3 {
+            font-size:13px; font-weight:700; color:#374151;
+            margin-bottom:10px; display:flex; align-items:center; gap:6px;
+        }
+        .url-input-row {
+            display:flex; gap:8px;
+        }
+        .url-input-row input {
+            flex:1; padding:11px 14px; border:1.5px solid #e5e7eb;
+            border-radius:10px; font-size:13px;
+            font-family:'Noto Sans KR',sans-serif; color:#374151;
+            transition:border-color 0.2s;
+        }
+        .url-input-row input:focus { outline:none; border-color:#0d6efd; }
+        .url-input-row input::placeholder { color:#9ca3af; }
+        .go-btn {
+            padding:11px 18px; background:#0d6efd; color:white;
+            border:none; border-radius:10px; font-size:13px; font-weight:700;
+            font-family:'Noto Sans KR',sans-serif; cursor:pointer;
+            transition:all 0.2s; white-space:nowrap;
+            display:flex; align-items:center; gap:6px;
+        }
+        .go-btn:hover { background:#0a58ca; }
+
+        .error-msg {
+            background:#fef2f2; border:1px solid #fca5a5; border-radius:8px;
+            padding:9px 14px; font-size:12px; color:#dc2626;
+            margin-top:10px; display:none; align-items:center; gap:7px;
+        }
+        .error-msg.show { display:flex; }
+
+        .divider {
+            display:flex; align-items:center; gap:12px;
+            margin:22px 0; color:#9ca3af; font-size:12px;
+        }
+        .divider::before, .divider::after { content:''; flex:1; height:1px; background:#e5e7eb; }
+
+        /* 팀장 전용 */
+        .admin-link {
+            display:flex; align-items:center; justify-content:center; gap:8px;
+            padding:12px; background:#f8fafc; border:1.5px solid #e5e7eb;
+            border-radius:10px; font-size:13px; font-weight:600; color:#1a3a5c;
+            text-decoration:none; transition:all 0.2s;
+        }
+        .admin-link:hover { background:#eff6ff; border-color:#bfdbfe; }
+
+        .card-footer {
+            padding:16px 36px 24px; text-align:center;
+            border-top:1px solid #f0f0f0;
+        }
+        .card-footer p { font-size:12px; color:#9ca3af; line-height:1.7; }
+        .card-footer a { color:#0d6efd; text-decoration:none; font-weight:600; }
+
+        /* 독립 운영 배너 */
+        .independence-banner {
+            background:linear-gradient(135deg,#f0fdf4,#dcfce7);
+            border:1.5px solid #a7f3d0; border-radius:12px;
+            padding:14px 18px; margin-top:14px;
+            display:flex; gap:10px; align-items:flex-start;
+        }
+        .independence-banner i { color:#059669; font-size:16px; margin-top:2px; flex-shrink:0; }
+        .independence-banner p { font-size:12px; color:#065f46; line-height:1.7; }
+        .independence-banner a { color:#059669; font-weight:700; text-decoration:none; }
+        .independence-banner a:hover { text-decoration:underline; }
+    </style>
+</head>
+<body>
+<div class="card">
+    <div class="card-header">
+        <div class="logo-icon">🏛️</div>
+        <h1>비교과센터 업무 대시보드</h1>
+        <p>국립대학 비교과센터 통합 업무 관리 시스템</p>
+    </div>
+
+    <div class="card-body">
+        <div class="guide-box">
+            <i class="fas fa-info-circle"></i>
+            <p>
+                이 시스템은 <strong>개인 접근 링크</strong>를 통해 이용합니다.<br>
+                팀장에게 받은 개인 링크를 직접 브라우저에 입력하거나,<br>
+                아래에 접근 코드(key=)를 붙여넣으세요.
+            </p>
+        </div>
+
+        <div class="direct-section">
+            <h3><i class="fas fa-key" style="color:#0d6efd"></i> 접근 코드로 입력</h3>
+            <div class="url-input-row">
+                <input type="text" id="tokenInput"
+                    placeholder="접근 코드를 붙여넣으세요 (예: SYS-2026-...)"
+                    onkeydown="if(event.key==='Enter') goWithToken()">
+                <button class="go-btn" onclick="goWithToken()">
+                    <i class="fas fa-arrow-right"></i> 이동
+                </button>
+            </div>
+            <div class="error-msg" id="errorMsg">
+                <i class="fas fa-exclamation-circle"></i>
+                유효하지 않은 접근 코드입니다. 팀장에게 올바른 링크를 요청하세요.
+            </div>
+        </div>
+
+        <div class="divider">또는</div>
+
+        <a href="admin.html" class="admin-link">
+            <i class="fas fa-crown" style="color:#d97706"></i>
+            팀장 전용 · 링크 관리 페이지
+        </a>
+    </div>
+
+    <div class="card-footer">
+        <p>
+            개인 링크를 분실하셨나요?<br>
+            <a href="admin.html">팀장 링크 관리 페이지</a>에서 재발급 받으세요.
+        </p>
+        <div class="independence-banner">
+            <i class="fas fa-infinity"></i>
+            <p>
+                <strong>구독 종료 후에도 계속 사용하려면?</strong><br>
+                Supabase + GitHub Pages로 무료 독립 운영이 가능합니다.<br>
+                <a href="setup.html">👉 영구 무료 독립 운영 가이드 보기</a>
+            </p>
+        </div>
+    </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/common.js"></script>
+<script>
+// 이미 세션에 사용자 정보가 있으면 해당 대시보드로 이동
+const stored = sessionStorage.getItem('currentUser');
+if (stored) {
+    const u = JSON.parse(stored);
+    const pageMap = {
+        manager: 'dashboard_manager.html',
+        staff_system: 'dashboard_system.html',
+        staff_rc: 'dashboard_rc.html',
+    };
+    if (u.role === 'manager') location.href = `dashboard_manager.html?key=${u.token}`;
+    else if (u.department === 'system') location.href = `dashboard_system.html?key=${u.token}`;
+    else if (u.department === 'rc') location.href = `dashboard_rc.html?key=${u.token}`;
+    else if (u.department === 'communication') location.href = `dashboard_comm.html?key=${u.token}`;
+}
+
+function goWithToken() {
+    let input = document.getElementById('tokenInput').value.trim();
+    // URL 전체가 붙여넣어진 경우 key= 파라미터 추출
+    if (input.includes('key=')) {
+        const match = input.match(/[?&]key=([^&]+)/);
+        if (match) input = match[1];
+    }
+    const userInfo = ACCESS_TOKENS[input];
+    if (!userInfo) {
+        document.getElementById('errorMsg').classList.add('show');
+        return;
+    }
+    document.getElementById('errorMsg').classList.remove('show');
+    location.href = `${userInfo.page}?key=${input}`;
+}
+</script>
+</body>
+</html>

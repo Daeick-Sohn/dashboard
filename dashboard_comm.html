@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>의사소통 교육 대시보드 | 비교과센터</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="css/common.css">
+    <style>
+        .dept-badge { display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:20px;font-size:13px;font-weight:700;background:#fffbeb;color:#d97706; }
+        .monthly-grid { display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px; }
+        .month-card { background:white;border-radius:12px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,0.06);cursor:pointer;border:2px solid transparent;transition:all 0.2s; }
+        .month-card.current { border-color:#7c3aed; }
+        .month-card .m-label { font-size:11px;color:#9ca3af;font-weight:600; }
+        .month-card .m-count { font-size:22px;font-weight:700;color:#1f2937; }
+        .month-card .m-done { font-size:11px;color:#059669; }
+        .chart-wrap { height:200px;position:relative; }
+        .tab-nav { display:flex;gap:0;border-bottom:2px solid #e5e7eb;margin-bottom:20px; }
+        .tab-nav-item { padding:10px 20px;font-size:14px;font-weight:500;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;color:#6b7280;font-family:'Noto Sans KR',sans-serif; }
+        .tab-nav-item.active { border-bottom-color:#7c3aed;color:#7c3aed;font-weight:700; }
+        .chart-grid { display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px; }
+        @media(max-width:1024px){ .monthly-grid{ grid-template-columns:repeat(3,1fr); } }
+        @media(max-width:768px){ .monthly-grid{ grid-template-columns:repeat(2,1fr); } .chart-grid{ grid-template-columns:1fr; } }
+        @media(max-width:480px){ .monthly-grid{ grid-template-columns:repeat(2,1fr); } }
+    </style>
+</head>
+<body>
+<nav class="sidebar" style="background:#78350f">
+    <div class="sidebar-logo">
+        <h2>의사소통<br>교육 프로그램</h2>
+        <p>연구원 업무 대시보드</p>
+    </div>
+    <div class="sidebar-user">
+        <div class="user-name" id="sideUserName"></div>
+        <div class="user-role" id="sideUserRole">연구원</div>
+    </div>
+    <div class="sidebar-nav">
+        <div class="nav-section">업무</div>
+        <a class="nav-item active" onclick="showTab('overview')"><i class="fas fa-th-large"></i>내 현황</a>
+        <a class="nav-item" onclick="showTab('tasks')"><i class="fas fa-tasks"></i>업무 과제</a>
+        <a class="nav-item" onclick="showTab('budget')"><i class="fas fa-won-sign"></i>예산 집행</a>
+        <a class="nav-item" onclick="showTab('evaluations')"><i class="fas fa-star"></i>평가 관리</a>
+        <a class="nav-item" onclick="showTab('notices')"><i class="fas fa-bell"></i>특이사항</a>
+        <div class="nav-section">기간별</div>
+        <a class="nav-item" onclick="setView('monthly')"><i class="fas fa-calendar-day"></i>월별</a>
+        <a class="nav-item" onclick="setView('quarterly')"><i class="fas fa-calendar-week"></i>분기별</a>
+        <a class="nav-item" onclick="setView('yearly')"><i class="fas fa-calendar-alt"></i>연간</a>
+    </div>
+    <div class="sidebar-footer">
+        <div id="storageBadge"></div>
+        <button class="logout-btn" style="margin-bottom:8px" onclick="copyMyLink()"><i class="fas fa-copy"></i> 내 링크 복사</button>
+        <button class="logout-btn" onclick="logout()"><i class="fas fa-sign-out-alt"></i> 나가기</button>
+    </div>
+</nav>
+
+<!-- 사이드바 오버레이 -->
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+<div class="main-content">
+    <div class="topbar">
+        <div style="display:flex;align-items:center;gap:10px;min-width:0;flex:1">
+            <button class="menu-toggle" onclick="toggleSidebar()" aria-label="메뉴"><i class="fas fa-bars"></i></button>
+            <div class="topbar-title">
+                <h1 id="pageTitle">📊 내 현황</h1>
+                <p><span class="dept-badge"><i class="fas fa-comments"></i>의사소통 교육</span></p>
+            </div>
+        </div>
+        <div class="topbar-actions">
+            <div class="view-tabs">
+                <button class="view-tab active" id="tab-monthly" onclick="setView('monthly')">월별</button>
+                <button class="view-tab" id="tab-quarterly" onclick="setView('quarterly')">분기별</button>
+                <button class="view-tab" id="tab-yearly" onclick="setView('yearly')">연간</button>
+            </div>
+            <select id="yearSel" onchange="loadAll()" style="padding:7px 12px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;font-family:'Noto Sans KR',sans-serif"></select>
+            <select id="periodSel" onchange="loadAll()" style="padding:7px 12px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;font-family:'Noto Sans KR',sans-serif"></select>
+        </div>
+    </div>
+
+    <div class="page-content">
+        <!-- 내 현황 -->
+        <div id="tab-overview" class="section active">
+            <!-- 연구원 선택 필터 -->
+            <div style="background:white;border-radius:12px;padding:14px 20px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,0.06);display:flex;align-items:center;gap:12px;">
+                <span style="font-size:13px;font-weight:600;color:#374151">보기 대상:</span>
+                <select id="resFilter" onchange="renderAll()" style="padding:7px 12px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;font-family:'Noto Sans KR',sans-serif;">
+                    <option value="">우리 팀 전체</option>
+                    <option value="res01">김자영</option>
+                    <option value="res02">이진우</option>
+                    <option value="res03">김진국</option>
+                    <option value="res04">손대익</option>
+                </select>
+                <span style="font-size:12px;color:#9ca3af">※ 동료 현황도 확인 가능합니다</span>
+            </div>
+            <div class="stat-grid" id="statGrid"></div>
+            <div class="chart-grid">
+                <div class="card">
+                    <div class="card-header"><div class="card-title"><i class="fas fa-tasks" style="color:#d97706"></i>업무 현황</div></div>
+                    <div class="chart-wrap"><canvas id="taskChart"></canvas></div>
+                </div>
+                <div class="card">
+                    <div class="card-header"><div class="card-title"><i class="fas fa-won-sign" style="color:#d97706"></i>예산 집행률</div></div>
+                    <div style="padding:10px 0" id="budgetOverview"></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title"><i class="fas fa-calendar-check" style="color:#d97706"></i>이번 달 할 일 목록</div>
+                    <button class="btn btn-sm" style="background:#fffbeb;color:#d97706;border:1px solid #fcd34d" onclick="openTaskModal()"><i class="fas fa-plus"></i> 추가</button>
+                </div>
+                <div id="monthlyTodoList"></div>
+            </div>
+        </div>
+
+        <!-- 업무 과제 -->
+        <div id="tab-tasks" class="section">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title"><i class="fas fa-tasks" style="color:#d97706"></i>업무 과제</div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap">
+                        <button class="btn btn-sm" style="background:#d97706;color:white" onclick="openTaskModal()"><i class="fas fa-plus"></i> 과제 추가</button>
+                        <button class="btn btn-sm" style="background:#059669;color:white" onclick="ExcelExport.downloadTasks(allTasks,currentView,currentPeriod,currentYear,DEPT)"><i class="fas fa-file-excel"></i> 과제목록 다운로드</button>
+                    </div>
+                </div>
+                <div class="filter-bar">
+                    <select id="taskStatusFilter" onchange="renderTasks()">
+                        <option value="">전체 상태</option>
+                        <option value="todo">예정</option>
+                        <option value="in_progress">진행중</option>
+                        <option value="done">완료</option>
+                        <option value="delayed">지연</option>
+                    </select>
+                    <select id="taskPriorityFilter" onchange="renderTasks()">
+                        <option value="">전체 우선순위</option>
+                        <option value="high">높음</option>
+                        <option value="medium">중간</option>
+                        <option value="low">낮음</option>
+                    </select>
+                </div>
+                <div style="overflow-x:auto">
+                    <table class="data-table">
+                        <thead><tr><th>과제명</th><th>우선순위</th><th>상태</th><th>시작일</th><th>마감일</th><th>연/월</th><th>비고</th><th>관리</th></tr></thead>
+                        <tbody id="tasksTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 예산 집행 -->
+        <!-- 예산 집행 -->
+        <div id="tab-budget" class="section">
+            <div id="budgetStatGrid" class="stat-grid"></div>
+            <div class="card" style="margin-bottom:16px">
+                <div class="card-header">
+                    <div class="card-title"><i class="fas fa-list" style="color:#d97706"></i>세목별 예산 집계</div>
+                    <button class="btn btn-sm" style="background:#fffbeb;color:#d97706;border:1px solid #fde68a" onclick="ExcelExport.downloadBudgetByItem(allBudget,currentView,currentPeriod,currentYear,DEPT)"><i class="fas fa-file-excel"></i> 세목별 다운로드</button>
+                </div>
+                <div style="overflow-x:auto"><table class="data-table"><thead><tr><th style="min-width:140px">예산 세목</th><th style="text-align:right;white-space:nowrap">예산액</th><th style="text-align:right;white-space:nowrap">집행액</th><th style="text-align:right;white-space:nowrap">잔액</th><th style="text-align:center;white-space:nowrap">집행률</th></tr></thead><tbody id="budgetItemBody"></tbody></table></div>
+            </div>
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title"><i class="fas fa-won-sign" style="color:#d97706"></i>예산 집행 내역</div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap">
+                        <select id="budgetItemFilter" onchange="renderBudget()" style="padding:6px 10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:12px;font-family:'Noto Sans KR',sans-serif"><option value="">전체 세목</option></select>
+                        <select id="budgetProgramFilter" onchange="renderBudget()" style="padding:6px 10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:12px;font-family:'Noto Sans KR',sans-serif"><option value="">전체 프로그램</option></select>
+                        <button class="btn btn-sm" style="background:#d97706;color:white" onclick="openBudgetModal()"><i class="fas fa-plus"></i> 추가</button>
+                        <button class="btn btn-sm" style="background:#92400e;color:white" onclick="ExcelExport.downloadBudget(allBudget,currentView,currentPeriod,currentYear,DEPT)"><i class="fas fa-file-excel"></i> 다운로드</button>
+                    </div>
+                </div>
+                <div style="overflow-x:auto"><table class="data-table">
+                    <thead><tr><th>프로그램</th><th>항목명</th><th>세목</th><th style="text-align:right">예산액</th><th style="text-align:right">개별 집행액</th><th style="text-align:right">누계 집행액</th><th style="text-align:right">잔액</th><th>집행률</th><th>집행일</th><th>비고</th><th>관리</th></tr></thead>
+                    <tbody id="budgetTableBody"></tbody>
+                </table></div>
+            </div>
+        </div>
+
+        <!-- 프로그램 관리 -->
+        <div id="tab-programs" class="section">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title"><i class="fas fa-layer-group" style="color:#d97706"></i>하위 프로그램 관리</div>
+                    <div style="display:flex;gap:8px">
+                        <button class="btn btn-sm" style="background:#d97706;color:white" onclick="openProgramModal()"><i class="fas fa-plus"></i> 프로그램 추가</button>
+                        <button class="btn btn-sm" style="background:#92400e;color:white" onclick="ExcelExport.downloadProgramBudget(allBudget,allPrograms,currentView,currentPeriod,currentYear,DEPT)"><i class="fas fa-file-excel"></i> 다운로드</button>
+                    </div>
+                </div>
+                <div style="overflow-x:auto"><table class="data-table">
+                    <thead><tr><th>프로그램명</th><th>설명</th><th>예산액 합계</th><th>집행액 합계</th><th>집행률</th><th>등록년독</th><th>관리</th></tr></thead>
+                    <tbody id="programsTableBody"></tbody>
+                </table></div>
+            </div>
+        </div>
+
+        <!-- 평가 관리 -->
+        <div id="tab-evaluations" class="section">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title"><i class="fas fa-star" style="color:#d97706"></i>평가 관리</div>
+                    <button class="btn btn-sm" style="background:#d97706;color:white" onclick="openEvalModal()"><i class="fas fa-plus"></i> 추가</button>
+                </div>
+                <div style="overflow-x:auto">
+                    <table class="data-table">
+                        <thead><tr><th>평가명</th><th>구분</th><th>주관기관</th><th>평가예정일</th><th>마감일</th><th>상태</th><th>설명</th><th>관리</th></tr></thead>
+                        <tbody id="evalsTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 특이사항 -->
+        <div id="tab-notices" class="section">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title"><i class="fas fa-bell" style="color:#d97706"></i>특이사항</div>
+                    <button class="btn btn-sm" style="background:#d97706;color:white" onclick="openNoticeModal()"><i class="fas fa-plus"></i> 등록</button>
+                </div>
+                <div style="overflow-x:auto">
+                    <table class="data-table">
+                        <thead><tr><th>제목</th><th>내용</th><th>중요도</th><th>작성일</th><th>팀장확인</th><th>관리</th></tr></thead>
+                        <tbody id="noticesTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 과제 모달 -->
+<div class="modal-overlay" id="taskModal">
+    <div class="modal">
+        <h3 style="color:#7c3aed"><i class="fas fa-tasks"></i> <span id="taskModalTitle">과제 추가</span></h3>
+        <input type="hidden" id="taskId">
+        <div class="form-row"><label>연결 프로그램</label>
+            <select id="tProgramId" style="width:100%"><option value="">프로그램 선택 (선택사항)</option></select>
+        </div>
+        <div class="form-row"><label>과제명(세부 프로그램) *</label><select id="tTitle" style="width:100%" onchange="onProgramSelectChange('tTitle','tTitleOther')"><option value="">과제(프로그램) 선택 *</option></select>
+            <input type="text" id="tTitleOther" placeholder="직접 입력 *" style="display:none;margin-top:6px;width:100%;box-sizing:border-box"></div>
+        <div class="form-row"><label>설명</label><textarea id="tDesc" rows="3" placeholder="상세 내용"></textarea></div>
+        <div class="form-cols">
+            <div class="form-row"><label>우선순위</label>
+                <select id="tPriority"><option value="high">높음</option><option value="medium" selected>중간</option><option value="low">낮음</option></select>
+            </div>
+            <div class="form-row"><label>상태</label>
+                <select id="tStatus"><option value="todo" selected>예정</option><option value="in_progress">진행중</option><option value="done">완료</option><option value="delayed">지연</option></select>
+            </div>
+        </div>
+        <div class="form-cols">
+            <div class="form-row"><label>시작일</label><input type="date" id="tStartDate"></div>
+            <div class="form-row"><label>마감일</label><input type="date" id="tDueDate"></div>
+        </div>
+        <div class="form-cols">
+            <div class="form-row"><label>연도</label><input type="number" id="tYear" min="2020" max="2030"></div>
+            <div class="form-row"><label>월</label><input type="number" id="tMonth" min="1" max="12"></div>
+        </div>
+        <div class="form-row"><label>비고</label><textarea id="tNote" rows="2"></textarea></div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeModal('taskModal')">취소</button>
+            <button class="btn btn-sm" style="background:#d97706;color:white;padding:8px 18px" onclick="saveTask()">저장</button>
+        </div>
+    </div>
+</div>
+
+<!-- 예산 모달 -->
+<div class="modal-overlay" id="budgetModal">
+    <div class="modal">
+        <h3 style="color:#d97706"><i class="fas fa-won-sign"></i> <span id="budgetModalTitle">예산 추가</span></h3>
+        <input type="hidden" id="budgetId">
+        <div class="form-row"><label>연결 프로그램 *</label>
+            <select id="bProgramId" style="width:100%"><option value="">프로그램 선택</option></select>
+        </div>
+        <div class="form-row"><label>세부 프로그램 *</label>
+            <select id="bTitle" style="width:100%" onchange="onProgramSelectChange('bTitle','bTitleOther');onBudgetProgramChange()"><option value="">세부 프로그램 선택 *</option></select>
+            <input type="text" id="bTitleOther" placeholder="직접 입력 *" style="display:none;margin-top:6px;width:100%;box-sizing:border-box" oninput="onBudgetProgramChange()">
+        </div>
+        <div id="budgetProgSummary" style="display:none;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px 14px;margin:0 0 8px;font-size:12px"></div>
+        <div class="form-cols">
+            <div class="form-row"><label>예산 세목 *</label><select id="bBudgetItem" style="width:100%"></select></div>
+            <div class="form-row"><label>집행일</label><input type="date" id="bExecDate"></div>
+        </div>
+        <div class="form-cols">
+            <div class="form-row"><label>예산액 (원)</label><input type="number" id="bBudgeted" placeholder="0" oninput="calcBudgetRate()"></div>
+            <div class="form-row"><label>집행액 (원)</label><input type="number" id="bExecuted" placeholder="0" oninput="calcBudgetRate()"></div>
+        </div>
+        <div style="background:#f0f4f8;border-radius:8px;padding:10px 14px;margin:4px 0 10px;font-size:13px;display:flex;align-items:center;gap:12px">
+            <span style="color:#6b7280">집행률:</span>
+            <strong id="bRateDisplay" style="color:#d97706;font-size:16px">0%</strong>
+            <span style="color:#6b7280">잔액:</span>
+            <strong id="bRemainDisplay" style="color:#059669">0원</strong>
+        </div>
+        <div class="form-cols">
+            <div class="form-row"><label>연도</label><input type="number" id="bYear"></div>
+            <div class="form-row"><label>월</label><input type="number" id="bMonth" min="1" max="12"></div>
+        </div>
+        <div class="form-row"><label>설명</label><textarea id="bDesc" rows="2"></textarea></div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeModal('budgetModal')">취소</button>
+            <button class="btn btn-sm" style="background:#d97706;color:white;padding:8px 18px" onclick="saveBudget()">저장</button>
+        </div>
+    </div>
+</div>
+
+<!-- 프로그램 모달 -->
+<div class="modal-overlay" id="programModal">
+    <div class="modal">
+        <h3 style="color:#d97706"><i class="fas fa-layer-group"></i> <span id="programModalTitle">프로그램 추가</span></h3>
+        <input type="hidden" id="programId">
+        <div class="form-row"><label>프로그램명 *</label><input type="text" id="pName" placeholder="하위 프로그램명"></div>
+        <div class="form-row"><label>설명</label><textarea id="pDesc" rows="3"></textarea></div>
+        <div class="form-cols">
+            <div class="form-row"><label>연도</label><input type="number" id="pYear"></div>
+            <div class="form-row"><label>상태</label><select id="pStatus"><option value="active">운영중</option><option value="planning">계획중</option><option value="completed">완료</option></select></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeModal('programModal')">취소</button>
+            <button class="btn btn-sm" style="background:#d97706;color:white;padding:8px 18px" onclick="saveProgram()">저장</button>
+        </div>
+    </div>
+</div>
+
+<!-- 평가 모달 -->
+<div class="modal-overlay" id="evalModal">
+    <div class="modal">
+        <h3 style="color:#d97706"><i class="fas fa-star"></i> <span id="evalModalTitle">평가 추가</span></h3>
+        <input type="hidden" id="evalId">
+        <div class="form-cols">
+            <div class="form-row"><label>구분</label>
+                <select id="eType"><option value="internal">대내 평가</option><option value="external">대외 평가</option></select>
+            </div>
+            <div class="form-row"><label>상태</label>
+                <select id="eStatus"><option value="preparing">준비중</option><option value="submitted">제출완료</option><option value="completed">완료</option></select>
+            </div>
+        </div>
+        <div class="form-row"><label>평가명 *</label><input type="text" id="eTitle" placeholder="평가명"></div>
+        <div class="form-cols">
+            <div class="form-row"><label>주관기관</label><input type="text" id="eOrg"></div>
+            <div class="form-row"><label>연도</label><input type="number" id="eYear"></div>
+        </div>
+        <div class="form-cols">
+            <div class="form-row"><label>평가 예정일</label><input type="date" id="eEvalDate"></div>
+            <div class="form-row"><label>마감일</label><input type="date" id="eDueDate"></div>
+        </div>
+        <div class="form-row"><label>설명/준비내역</label><textarea id="eDesc" rows="3"></textarea></div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeModal('evalModal')">취소</button>
+            <button class="btn btn-sm" style="background:#d97706;color:white;padding:8px 18px" onclick="saveEval()">저장</button>
+        </div>
+    </div>
+</div>
+
+<!-- 특이사항 모달 -->
+<div class="modal-overlay" id="noticeModal">
+    <div class="modal">
+        <h3 style="color:#7c3aed"><i class="fas fa-bell"></i> 특이사항 등록</h3>
+        <input type="hidden" id="noticeId">
+        <div class="form-cols">
+            <div class="form-row"><label>중요도</label>
+                <select id="nSeverity"><option value="high">긴급</option><option value="medium" selected>일반</option><option value="low">낮음</option></select>
+            </div>
+            <div class="form-row"><label>작성일</label><input type="date" id="nDate"></div>
+        </div>
+        <div class="form-row"><label>제목 *</label><input type="text" id="nTitle" placeholder="특이사항 제목"></div>
+        <div class="form-row"><label>내용 *</label><textarea id="nContent" rows="4" placeholder="내용을 입력하세요"></textarea></div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeModal('noticeModal')">취소</button>
+            <button class="btn btn-sm" style="background:#d97706;color:white;padding:8px 18px" onclick="saveNotice()">저장</button>
+        </div>
+    </div>
+</div>
+
+<div class="toast" id="toast"><i class="fas fa-check-circle"></i><span id="toastMsg"></span></div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/common.js"></script>
+<script src="js/budget_categories.js"></script>
+<script src="js/excel_export.js"></script>
+<script>
+const DEPT = 'communication';
+const DEPT_COLOR = '#d97706';
+const user = requireAuth(['researcher','staff','manager']);
+if(user) {
+    document.getElementById('sideUserName').textContent = user.name;
+    document.getElementById('sideUserRole').textContent = user.position || '연구원';
+}
+
+let allTasks=[], allBudget=[], allEvals=[], allNotices=[], allPrograms=[];
+let currentView='monthly', currentYear=CUR_YEAR, currentPeriod=CUR_MONTH;
+let taskChartInst=null;
+
+window.onload = async () => {
+    initYearSel(); initPeriodSel();
+    // 세목 필터 초기화
+    const itemFilter = document.getElementById('budgetItemFilter');
+    if(itemFilter && typeof BUDGET_ITEMS !== 'undefined')
+        BUDGET_ITEMS.forEach(item => { itemFilter.innerHTML += `<option value="${item.value}">${item.label}</option>`; });
+    // 예산 세목 모달 select 초기화
+    const bItemSel = document.getElementById('bBudgetItem');
+    if(bItemSel && typeof BUDGET_ITEMS !== 'undefined') {
+        bItemSel.innerHTML = '<option value="">세목 선택</option>';
+        BUDGET_ITEMS.forEach(item => { bItemSel.innerHTML += `<option value="${item.value}">${item.label}</option>`; });
+    }
+    // 세부 프로그램 select 초기화
+    if(typeof populateProgramSelect !== 'undefined') populateProgramSelect(DEPT, '');
+    await loadAll();
+    injectStorageBadge();
+};
+function initYearSel(){
+    const sel=document.getElementById('yearSel'); sel.innerHTML='';
+    for(let y=CUR_YEAR+1;y>=2023;y--) sel.innerHTML+=`<option value="${y}" ${y===CUR_YEAR?'selected':''}>${y}년</option>`;
+}
+function initPeriodSel(){ updatePeriodSel(); }
+function updatePeriodSel(){
+    const sel=document.getElementById('periodSel'); sel.innerHTML='';
+    if(currentView==='monthly'){ for(let m=1;m<=12;m++) sel.innerHTML+=`<option value="${m}" ${m===CUR_MONTH?'selected':''}>${m}월</option>`; }
+    else if(currentView==='quarterly'){ for(let q=1;q<=4;q++) sel.innerHTML+=`<option value="${q}" ${q===CUR_QUARTER?'selected':''}>${q}분기</option>`; }
+    else sel.innerHTML='<option value="0">연간 전체</option>';
+}
+function setView(v){
+    currentView=v;
+    ['monthly','quarterly','yearly'].forEach(x=>document.getElementById('tab-'+x).classList.toggle('active',x===v));
+    updatePeriodSel(); loadAll();
+}
+function showTab(t){
+    document.querySelectorAll('.section').forEach(el=>el.classList.remove('active'));
+    document.getElementById('tab-'+t).classList.add('active');
+    document.querySelectorAll('.nav-item').forEach(el=>el.classList.remove('active'));
+    const titles={overview:'📊 내 현황',tasks:'📋 업무 과제',budget:'💰 예산 집행',evaluations:'⭐ 평가 관리',notices:'🔔 특이사항'};
+    document.getElementById('pageTitle').textContent=titles[t]||t;
+}
+
+async function loadAll(){
+    currentYear=parseInt(document.getElementById('yearSel').value);
+    currentPeriod=parseInt(document.getElementById('periodSel').value)||0;
+    const [t,b,e,n,p]=await Promise.all([
+        DB.getAll('tasks'),
+        DB.getAll('budget'),
+        DB.getAll('evaluations'),
+        DB.getAll('notices'),
+        DB.getAll('programs'),
+    ]);
+    // 의사소통팀 전체 데이터를 로드 (연구원 필터는 렌더링 시점에 적용)
+    allTasks=t.filter(r=>!r.deleted&&r.department===DEPT);
+    allBudget=b.filter(r=>!r.deleted&&r.department===DEPT);
+    allEvals=e.filter(r=>!r.deleted&&r.department===DEPT);
+    allNotices=n.filter(r=>!r.deleted&&r.department===DEPT);
+    allPrograms=p.filter(r=>!r.deleted&&r.department===DEPT);
+    // 로그인한 연구원을 기본 선택
+    const resSel=document.getElementById('resFilter');
+    if(resSel&&!resSel.value&&user.role==='researcher') resSel.value=user.id;
+    renderAll();
+}
+function getResFilter(){
+    const sel=document.getElementById('resFilter');
+    return sel?sel.value:'';
+}
+function filterByRes(arr){
+    const rf=getResFilter();
+    if(!rf) return arr;
+    return arr.filter(i=>i.assignee_id===rf||i.author_id===rf);
+}
+function filterByPeriod(arr){
+    return arr.filter(item=>{
+        if(item.year&&item.year!=currentYear)return false;
+        if(currentView==='monthly'&&currentPeriod&&item.month&&item.month!=currentPeriod)return false;
+        if(currentView==='quarterly'&&currentPeriod&&item.quarter&&item.quarter!=currentPeriod)return false;
+        return true;
+    });
+}
+function getFiltered(arr){return filterByRes(filterByPeriod(arr));}
+function renderAll(){ populateProgramSelects(); populateBudgetProgramFilter(); renderOverview(); renderTasks(); renderBudget(); renderPrograms(); renderEvals(); renderNotices(); }
+
+function populateProgramSelects(){
+    const taskSel=document.getElementById('tProgramId');
+    const budgetSel=document.getElementById('bProgramId');
+    if(taskSel) taskSel.innerHTML='<option value="">프로그램 선택 (선택사항)</option>'+allPrograms.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+    if(budgetSel) budgetSel.innerHTML='<option value="">프로그램 선택</option>'+allPrograms.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+}
+
+function populateBudgetProgramFilter(){
+    const sel=document.getElementById('budgetProgramFilter');
+    if(!sel)return;
+    const cur=sel.value;
+    // 해당 부서(DEPT) 예산 데이터의 title만 표시
+    const titles=[...new Set(
+        allBudget.filter(r=>!r.deleted && r.title && r.department===DEPT).map(r=>r.title)
+    )].sort();
+    sel.innerHTML='<option value="">전체 세부프로그램</option>'+titles.map(t=>`<option value="${t}"${t===cur?' selected':''}>${t}</option>`).join('');
+}
+
+function renderOverview(){
+    const tasks=getFiltered(allTasks);
+    const budget=getFiltered(allBudget);
+    const total=tasks.length, done=tasks.filter(t=>t.status==='done').length;
+    const inpro=tasks.filter(t=>t.status==='in_progress').length;
+    const delayed=tasks.filter(t=>t.status==='delayed').length;
+        const totalB=(() => {
+        const pbm=new Map();
+        allBudget.filter(r=>!r.deleted).forEach(r=>{ const k=r.title||'';const amt=+r.budgeted_amount||0;if(amt>0){const cur=pbm.get(k);if(!cur||(r.updated_at||r.created_at||0)>(cur.ts||0))pbm.set(k,{amt,ts:r.updated_at||r.created_at||0});} });
+        return [...new Set(budget.map(b=>b.title||''))].reduce((s,p)=>s+(pbm.get(p)?.amt||0),0);
+    })();
+    const totalE=budget.reduce((s,b)=>s+(+b.executed_amount||0),0);
+    const rate=pct(totalE,totalB);
+
+    document.getElementById('statGrid').innerHTML=`
+        <div class="stat-card" style="border-color:${DEPT_COLOR}">
+            <div class="stat-icon" style="background:#f5f3ff;color:${DEPT_COLOR}"><i class="fas fa-tasks"></i></div>
+            <div class="stat-info"><div class="label">전체 과제</div><div class="value">${total}</div><div class="sub">진행 ${inpro}건</div></div>
+        </div>
+        <div class="stat-card" style="border-color:#059669">
+            <div class="stat-icon" style="background:#ecfdf5;color:#059669"><i class="fas fa-check-circle"></i></div>
+            <div class="stat-info"><div class="label">완료율</div><div class="value">${total>0?Math.round(done/total*100):0}%</div><div class="sub">${done}/${total}</div></div>
+        </div>
+        <div class="stat-card" style="border-color:#dc2626">
+            <div class="stat-icon" style="background:#fef2f2;color:#dc2626"><i class="fas fa-exclamation-triangle"></i></div>
+            <div class="stat-info"><div class="label">지연 과제</div><div class="value">${delayed}</div><div class="sub">확인 필요</div></div>
+        </div>
+        <div class="stat-card" style="border-color:#d97706">
+            <div class="stat-icon" style="background:#fffbeb;color:#d97706"><i class="fas fa-won-sign"></i></div>
+            <div class="stat-info"><div class="label">예산 집행률</div><div class="value">${rate}%</div><div class="sub">${formatMoney(totalE)}</div></div>
+        </div>`;
+
+    // 차트
+    const ctx=document.getElementById('taskChart').getContext('2d');
+    if(taskChartInst)taskChartInst.destroy();
+    taskChartInst=new Chart(ctx,{type:'doughnut',data:{labels:['예정','진행중','완료','지연'],datasets:[{data:[tasks.filter(t=>t.status==='todo').length,inpro,done,delayed],backgroundColor:['#e5e7eb','#a78bfa','#10b981','#ef4444'],borderWidth:2,borderColor:'white'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:12},padding:10}}}}});
+
+    // 예산 현황
+    document.getElementById('budgetOverview').innerHTML=`
+        <div style="text-align:center;padding:10px 0">
+            <div style="font-size:32px;font-weight:700;color:${DEPT_COLOR}">${rate}%</div>
+            <div style="font-size:13px;color:#6b7280;margin:4px 0">집행률</div>
+            <div class="progress-bar-wrap" style="max-width:200px;margin:10px auto"><div class="progress-bar-fill" style="width:${rate}%;background:${DEPT_COLOR}"></div></div>
+            <div style="margin-top:10px;font-size:13px">집행: <strong>${formatMoney(totalE)}</strong></div>
+            <div style="font-size:12px;color:#9ca3af">예산: ${formatMoney(totalB)}</div>
+        </div>`;
+
+    // 이번 달 할 일
+    const monthTasks=allTasks.filter(t=>t.year==CUR_YEAR&&t.month==CUR_MONTH&&t.status!=='done');
+    document.getElementById('monthlyTodoList').innerHTML=monthTasks.length?monthTasks.map(t=>`
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #f0f0f0">
+            <input type="checkbox" ${t.status==='done'?'checked':''} style="width:16px;height:16px;accent-color:${DEPT_COLOR}" onchange="toggleTaskDone('${t.id}',this.checked)">
+            ${badge(PRIORITY_MAP,t.priority)}
+            <span style="flex:1;font-size:13px;${t.status==='done'?'text-decoration:line-through;color:#9ca3af':''}">${t.title}</span>
+            <span style="font-size:11px;color:#9ca3af">${formatDate(t.due_date)}</span>
+            ${badge(STATUS_MAP,t.status)}
+        </div>`).join(''):'<div class="empty-state"><i class="fas fa-check-circle" style="color:#059669"></i><p>이번 달 할 일이 없습니다</p></div>';
+}
+
+async function toggleTaskDone(id, checked){
+    await DB.update('tasks',id,{status:checked?'done':'in_progress'});
+    await loadAll();
+}
+
+function renderTasks(){
+    let tasks=getFiltered(allTasks);
+    const sf=document.getElementById('taskStatusFilter')?.value;
+    const pf=document.getElementById('taskPriorityFilter')?.value;
+    if(sf)tasks=tasks.filter(t=>t.status===sf);
+    if(pf)tasks=tasks.filter(t=>t.priority===pf);
+    const tbody=document.getElementById('tasksTableBody');
+    tbody.innerHTML=tasks.length?tasks.map(t=>`
+        <tr>
+            <td><strong style="font-size:13px">${t.title}</strong>${t.description?`<div style="font-size:11px;color:#9ca3af;margin-top:1px">${t.description.substring(0,40)}...</div>`:''}</td>
+            <td>${badge(PRIORITY_MAP,t.priority)}</td>
+            <td>${badge(STATUS_MAP,t.status)}</td>
+            <td style="font-size:12px">${formatDate(t.start_date)}</td>
+            <td style="font-size:12px">${formatDate(t.due_date)}</td>
+            <td style="font-size:12px;color:#6b7280">${t.year||''}년 ${t.month||''}월</td>
+            <td style="font-size:11px;color:#9ca3af">${t.note||''}</td>
+            <td>
+                <button class="btn btn-outline btn-sm" onclick="editTask('${t.id}')"><i class="fas fa-edit"></i></button>
+                <button class="btn btn-danger btn-sm" onclick="deleteTask('${t.id}')"><i class="fas fa-trash"></i></button>
+            </td>
+        </tr>`).join(''):`<tr><td colspan="8"><div class="empty-state"><i class="fas fa-inbox"></i><p>등록된 과제가 없습니다</p></div></td></tr>`;
+}
+
+function renderBudget(){
+    let budget=getFiltered(allBudget);
+    const itemF=document.getElementById('budgetItemFilter')?.value;
+    if(itemF) budget=budget.filter(b=>(b.budget_item||b.category||'')===itemF);
+    const progF=document.getElementById('budgetProgramFilter')?.value;
+    if(progF) budget=budget.filter(b=>(b.title||'')===progF);
+
+    // 프로그램별 총예산 맵: 동일 프로그램+세목 쌍의 budgeted_amount 합산
+    // (같은 프로그램이라도 세목이 다르면 각각의 예산을 가지므로 전부 더함)
+    function buildProgBudgetMap(rows){
+        const pairSet=new Set(); // '프로그램명|세목' 중복 방지
+        const map=new Map();
+        rows.filter(r=>!r.deleted).forEach(r=>{
+            const k=r.title||'';
+            const itemK=(r.budget_item||r.category||'');
+            const pairK=k+'|'+itemK;
+            if(!pairSet.has(pairK)){
+                pairSet.add(pairK);
+                map.set(k,(map.get(k)||0)+(+r.budgeted_amount||0));
+            }
+        });
+        return map;
+    }
+    const progBudgetMap=buildProgBudgetMap(allBudget);
+    // 통계: 예산액은 표시된 프로그램별 중복 제거
+    const progSet=new Set(budget.map(b=>b.title||''));
+    const totalB=[...progSet].reduce((s,p)=>s+(progBudgetMap.get(p)||0),0);
+    const totalE=budget.reduce((s,b)=>s+(+b.executed_amount||0),0);
+    const rate=pct(totalE,totalB);
+    document.getElementById('budgetStatGrid').innerHTML=`
+        <div class="stat-card" style="border-color:#6366f1"><div class="stat-icon" style="background:#eef2ff;color:#6366f1"><i class="fas fa-money-bill"></i></div><div class="stat-info"><div class="label">전체 예산액</div><div class="value" style="font-size:18px">${formatMoney(totalB)}</div></div></div>
+        <div class="stat-card" style="border-color:#059669"><div class="stat-icon" style="background:#ecfdf5;color:#059669"><i class="fas fa-check-circle"></i></div><div class="stat-info"><div class="label">집행액</div><div class="value" style="font-size:18px">${formatMoney(totalE)}</div></div></div>
+        <div class="stat-card" style="border-color:#d97706"><div class="stat-icon" style="background:#fffbeb;color:#d97706"><i class="fas fa-percent"></i></div><div class="stat-info"><div class="label">집행률</div><div class="value">${rate}%</div><div style="margin-top:6px"><div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${rate}%;background:${DEPT_COLOR}"></div></div></div></div></div>`;
+    // 세목별 집계: (세목, 프로그램) 쌍으로 예산액 1회만 합산
+    const allFiltered=getFiltered(allBudget);
+    const iBody=document.getElementById('budgetItemBody');
+    if(iBody && typeof BUDGET_ITEMS!=='undefined'){
+        // 세목별 집계: (프로그램+세목) 쌍당 budgeted_amount 1회만 합산
+        const addedPairs2=new Set();
+        const g={};BUDGET_ITEMS.forEach(item=>{g[item.value]={b:0,e:0};});
+        allFiltered.forEach(b=>{
+            const key=b.budget_item||b.category||'기타';
+            if(!g[key])g[key]={b:0,e:0};
+            const pKey=(b.title||'')+'|'+key;
+            if(!addedPairs2.has(pKey)){
+                addedPairs2.add(pKey);
+                g[key].b+=+b.budgeted_amount||0;
+            }
+            g[key].e+=+b.executed_amount||0;
+        });
+        let grandB=0,grandE=0,iRows='';
+        BUDGET_ITEMS.forEach(item=>{
+            const d=g[item.value]||{b:0,e:0};
+            if(d.b===0&&d.e===0)return;
+            grandB+=d.b;grandE+=d.e;
+            const r=d.b>0?Math.round(d.e/d.b*100):0;
+            const color=r>=90?'#dc2626':r>=70?'#d97706':'#059669';
+            iRows+=`<tr><td style="white-space:nowrap">${budgetItemBadge(item.label||item.value)}</td><td style="text-align:right;white-space:nowrap">${formatMoney(d.b)}</td><td style="text-align:right;font-weight:600;color:${color};white-space:nowrap">${formatMoney(d.e)}</td><td style="text-align:right;color:${d.b-d.e<0?'#dc2626':'#6b7280'};white-space:nowrap">${formatMoney(d.b-d.e)}</td><td style="text-align:center"><div style="display:inline-flex;align-items:center;gap:6px"><div class="progress-bar-wrap" style="width:60px"><div class="progress-bar-fill" style="width:${r}%;background:${color}"></div></div><span style="font-size:11px;font-weight:600;color:${color}">${r}%</span></div></td></tr>`;
+        });
+        if(grandB>0){const gr=Math.round(grandE/grandB*100);const gc=gr>=90?'#dc2626':gr>=70?'#d97706':'#059669';iRows+=`<tr style="font-weight:700;background:#f8fafc"><td>합계</td><td style="text-align:right;white-space:nowrap">${formatMoney(grandB)}</td><td style="text-align:right;color:${gc};white-space:nowrap">${formatMoney(grandE)}</td><td style="text-align:right;color:${grandB-grandE<0?'#dc2626':'#6b7280'};white-space:nowrap">${formatMoney(grandB-grandE)}</td><td style="text-align:center;color:${gc}">${gr}%</td></tr>`;}
+        iBody.innerHTML=iRows||'<tr><td colspan="5" style="text-align:center;color:#9ca3af">데이터 없음</td></tr>';
+    }
+    // 프로그램별 날짜순 running total 계산
+    const progRunningMap=new Map();
+    const progGroups={};
+    allBudget.filter(r=>!r.deleted).forEach(r=>{
+        const k=r.title||'';
+        if(!progGroups[k])progGroups[k]=[];
+        progGroups[k].push(r);
+    });
+    Object.entries(progGroups).forEach(([prog,rows])=>{
+        rows.sort((a,b)=>{
+            const da=a.execution_date||a.created_at||'';
+            const db=b.execution_date||b.created_at||'';
+            return da<db?-1:da>db?1:0;
+        });
+        const totalBudget=progBudgetMap.get(prog)||0;
+        let cumExec=0;
+        rows.forEach(r=>{
+            cumExec+=(+r.executed_amount||0);
+            progRunningMap.set(r.id,{cumExec,remain:totalBudget-cumExec,rate:totalBudget>0?Math.min(Math.round(cumExec/totalBudget*100),999):0});
+        });
+    });
+    const tbody=document.getElementById('budgetTableBody');
+    const progName=id=>{ const p=allPrograms.find(x=>x.id===id); return p?p.name:'-'; };
+    if(!budget.length){tbody.innerHTML=`<tr><td colspan="11"><div class="empty-state"><i class="fas fa-inbox"></i><p>등록된 예산 내역이 없습니다</p></div></td></tr>`;return;}
+    // 프로그램명 오름차순 → 날짜 오름차순 정렬 (running total 순서와 일치)
+    budget.sort((a,b)=>{
+        const ta=a.title||'',tb=b.title||'';
+        if(ta<tb)return -1;if(ta>tb)return 1;
+        const da=a.execution_date||a.created_at||'';
+        const db=b.execution_date||b.created_at||'';
+        return da<db?-1:da>db?1:0;
+    });
+    tbody.innerHTML=budget.map(b=>{
+        const progTotalBudget=progBudgetMap.get(b.title||'')||0;
+        const running=progRunningMap.get(b.id)||{cumExec:0,remain:progTotalBudget,rate:0};
+        const r=running.rate;
+        const color=r>=90?'#dc2626':r>=70?'#d97706':'#059669';
+        const itemName=b.budget_item||b.category||'-';
+        return `<tr>
+            <td><strong>${b.program_id?progName(b.program_id):'-'}</strong></td>
+            <td><strong>${b.title||'-'}</strong></td>
+            <td>${typeof budgetItemBadge!=='undefined'?budgetItemBadge(itemName):`<span style="font-size:12px;color:#6b7280">${itemName}</span>`}</td>
+            <td style="font-size:13px;text-align:right">${formatMoney(progTotalBudget)}</td>
+            <td style="font-size:13px;font-weight:600;color:#1e40af;text-align:right">${formatMoney(+b.executed_amount||0)}</td>
+            <td style="font-size:12px;text-align:right;color:${color}">${formatMoney(running.cumExec)}</td>
+            <td style="font-size:13px;text-align:right;color:${running.remain<0?'#dc2626':'#6b7280'}">${formatMoney(running.remain)}</td>
+            <td><div style="display:flex;align-items:center;gap:4px"><div class="progress-bar-wrap" style="width:50px"><div class="progress-bar-fill" style="width:${Math.min(r,100)}%;background:${color}"></div></div><span style="font-size:11px;font-weight:600;color:${color}">${r}%</span></div></td>
+            <td style="font-size:12px">${formatDate(b.execution_date)}</td>
+            <td style="font-size:11px;color:#9ca3af;max-width:120px">${b.description||''}</td>
+            <td><button class="btn btn-outline btn-sm" onclick="editBudget('${b.id}')"><i class="fas fa-edit"></i></button><button class="btn btn-danger btn-sm" onclick="deleteBudget('${b.id}')"><i class="fas fa-trash"></i></button></td>
+        </tr>`;}).join('');
+}
+
+function renderEvals(){
+    const evals=allEvals.filter(e=>!currentYear||e.year==currentYear);
+    const tbody=document.getElementById('evalsTableBody');
+    tbody.innerHTML=evals.length?evals.map(e=>`
+        <tr>
+            <td><strong>${e.title}</strong></td>
+            <td><span style="padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;background:${e.eval_type==='external'?'#eff6ff':'#f5f3ff'};color:${e.eval_type==='external'?'#2563eb':'#7c3aed'}">${e.eval_type==='external'?'대외':'대내'}</span></td>
+            <td style="font-size:12px">${e.organization||'-'}</td>
+            <td style="font-size:12px">${formatDate(e.eval_date)}</td>
+            <td style="font-size:12px">${formatDate(e.due_date)}</td>
+            <td>${badge(STATUS_MAP,e.status)}</td>
+            <td style="font-size:11px;color:#9ca3af">${(e.description||'').substring(0,40)}</td>
+            <td><button class="btn btn-outline btn-sm" onclick="editEval('${e.id}')"><i class="fas fa-edit"></i></button><button class="btn btn-danger btn-sm" onclick="deleteEval('${e.id}')"><i class="fas fa-trash"></i></button></td>
+        </tr>`).join(''):`<tr><td colspan="8"><div class="empty-state"><i class="fas fa-inbox"></i><p>등록된 평가가 없습니다</p></div></td></tr>`;
+}
+
+function renderNotices(){
+    const notices=allNotices.filter(n=>!currentYear||n.year==currentYear);
+    const tbody=document.getElementById('noticesTableBody');
+    tbody.innerHTML=notices.length?notices.map(n=>`
+        <tr>
+            <td><strong>${n.title}</strong></td>
+            <td style="font-size:12px;color:#6b7280;max-width:200px">${(n.content||'').substring(0,50)}${(n.content||'').length>50?'...':''}</td>
+            <td>${badge(SEVERITY_MAP,n.severity)}</td>
+            <td style="font-size:12px">${formatDate(n.date)}</td>
+            <td>${n.is_confirmed?'<span style="font-size:12px;color:#059669"><i class="fas fa-check-circle"></i> 확인완료</span>':'<span style="font-size:12px;color:#d97706"><i class="fas fa-clock"></i> 미확인</span>'}</td>
+            <td><button class="btn btn-danger btn-sm" onclick="deleteNotice('${n.id}')"><i class="fas fa-trash"></i></button></td>
+        </tr>`).join(''):`<tr><td colspan="6"><div class="empty-state"><i class="fas fa-bell-slash"></i><p>등록된 특이사항이 없습니다</p></div></td></tr>`;
+}
+
+// 프로그램 CRUD
+function renderPrograms(){
+    const tbody=document.getElementById('programsTableBody');
+    if(!tbody)return;
+    const allB=allBudget;
+    tbody.innerHTML=allPrograms.length?allPrograms.map(prog=>{
+        const pb=allB.filter(b=>b.program_id===prog.id&&!b.deleted);
+        const latestRow=pb.filter(r=>+r.budgeted_amount>0).sort((a,b)=>(b.updated_at||b.created_at||0)-(a.updated_at||a.created_at||0))[0];
+        const totB=latestRow?+latestRow.budgeted_amount:0;
+        const totE=pb.reduce((s,b)=>s+(+b.executed_amount||0),0);
+        const r=pct(totE,totB);
+        return `<tr>
+            <td><strong style="color:${DEPT_COLOR}">${prog.name}</strong></td>
+            <td style="font-size:12px;color:#6b7280">${(prog.description||'').substring(0,40)}</td>
+            <td style="text-align:right;font-size:13px">${formatMoney(totB)}</td>
+            <td style="text-align:right;font-size:13px;font-weight:600;color:${DEPT_COLOR}">${formatMoney(totE)}</td>
+            <td><div style="display:flex;align-items:center;gap:6px"><div class="progress-bar-wrap" style="width:60px"><div class="progress-bar-fill" style="width:${r}%;background:${DEPT_COLOR}"></div></div><span style="font-size:11px;font-weight:600">${r}%</span></div></td>
+            <td style="font-size:12px">${prog.year||'-'}년</td>
+            <td><button class="btn btn-outline btn-sm" onclick="editProgram('${prog.id}')"><i class="fas fa-edit"></i></button><button class="btn btn-danger btn-sm" onclick="deleteProgram('${prog.id}')"><i class="fas fa-trash"></i></button></td>
+        </tr>`;
+    }).join(''):`<tr><td colspan="7"><div class="empty-state"><i class="fas fa-layer-group"></i><p>등록된 프로그램이 없습니다. 프로그램을 추가해 주세요.</p></div></td></tr>`;
+}
+function openProgramModal(){
+    document.getElementById('programId').value='';
+    ['pName','pDesc'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('pYear').value=CUR_YEAR;
+    document.getElementById('programModalTitle').textContent='프로그램 추가';
+    document.getElementById('programModal').classList.add('show');
+}
+function editProgram(id){
+    const p=allPrograms.find(x=>x.id===id);if(!p)return;
+    document.getElementById('programId').value=p.id;
+    document.getElementById('programModalTitle').textContent='프로그램 수정';
+    document.getElementById('pName').value=p.name||'';
+    document.getElementById('pDesc').value=p.description||'';
+    document.getElementById('pYear').value=p.year||CUR_YEAR;
+    document.getElementById('pStatus').value=p.status||'active';
+    document.getElementById('programModal').classList.add('show');
+}
+async function saveProgram(){
+    const id=document.getElementById('programId').value;
+    const data={
+        department:DEPT,
+        name:document.getElementById('pName').value.trim(),
+        description:document.getElementById('pDesc').value,
+        year:parseInt(document.getElementById('pYear').value)||CUR_YEAR,
+        status:document.getElementById('pStatus').value,
+        assignee_id:user.id,
+        assignee_name:user.name
+    };
+    if(!data.name){alert('프로그램명을 입력하세요');return;}
+    if(id)await DB.update('programs',id,data);else await DB.create('programs',data);
+    closeModal('programModal');await loadAll();showToast('프로그램이 저장되었습니다','success');
+}
+async function deleteProgram(id){if(!confirm('프로그램을 삭제하면 연결된 예산 내역의 프로그램 정보가 초기화됩니다. 삭제하시겠습니까?'))return;await DB.remove('programs',id);await loadAll();showToast('삭제되었습니다');}
+
+// 과제/예산 CRUD
+function openTaskModal(){document.getElementById('taskId').value='';['tDesc','tNote'].forEach(id=>document.getElementById(id).value='');document.getElementById('tYear').value=CUR_YEAR;document.getElementById('tMonth').value=CUR_MONTH;document.getElementById('tStartDate').value=getToday();document.getElementById('tDueDate').value='';document.getElementById('taskModalTitle').textContent='과제 추가';populateTaskProgramSelect(DEPT,'');document.getElementById('taskModal').classList.add('show');}
+function editTask(id){const t=allTasks.find(x=>x.id===id);if(!t)return;document.getElementById('taskId').value=t.id;document.getElementById('taskModalTitle').textContent='과제 수정';populateTaskProgramSelect(DEPT,t.title||'');document.getElementById('tDesc').value=t.description||'';document.getElementById('tPriority').value=t.priority||'medium';document.getElementById('tStatus').value=t.status||'todo';document.getElementById('tStartDate').value=t.start_date||'';document.getElementById('tDueDate').value=t.due_date||'';document.getElementById('tYear').value=t.year||CUR_YEAR;document.getElementById('tMonth').value=t.month||CUR_MONTH;document.getElementById('tNote').value=t.note||'';document.getElementById('taskModal').classList.add('show');}
+async function saveTask(){const id=document.getElementById('taskId').value;const yr=parseInt(document.getElementById('tYear').value)||CUR_YEAR;const mo=parseInt(document.getElementById('tMonth').value)||CUR_MONTH;const titleVal=getProgramValue('tTitle','tTitleOther');const data={department:DEPT,title:titleVal,description:document.getElementById('tDesc').value,assignee_id:user.id,assignee_name:user.name,priority:document.getElementById('tPriority').value,status:document.getElementById('tStatus').value,start_date:document.getElementById('tStartDate').value,due_date:document.getElementById('tDueDate').value,year:yr,month:mo,quarter:getQuarter(mo),note:document.getElementById('tNote').value};if(!data.title){alert('과제(프로그램)을 선택하세요');return;}if(id)await DB.update('tasks',id,data);else await DB.create('tasks',data);closeModal('taskModal');await loadAll();showToast('저장되었습니다','success');}
+async function deleteTask(id){if(!confirm('삭제하시겠습니까?'))return;await DB.remove('tasks',id);await loadAll();showToast('삭제되었습니다');}
+
+function calcBudgetRate(){
+    const b=parseFloat(document.getElementById('bBudgeted').value)||0;
+    const e=parseFloat(document.getElementById('bExecuted').value)||0;
+    const rEl=document.getElementById('bRateDisplay');
+    const remEl=document.getElementById('bRemainDisplay');
+    if(rEl) rEl.textContent=pct(e,b)+'%';
+    if(remEl) remEl.textContent=formatMoney(b-e);
+}
+function onBudgetProgramChange(){
+    const progName=getProgramValue('bTitle','bTitleOther');
+    const summaryEl=document.getElementById('budgetProgSummary');
+    const bBudgeted=document.getElementById('bBudgeted');
+    if(!progName||!summaryEl){if(summaryEl)summaryEl.style.display='none';return;}
+    const editingId=document.getElementById('budgetId').value;
+    const sameRows=allBudget.filter(r=>r.title===progName&&!r.deleted);
+    // 프로그램+세목 쌍당 budgeted_amount 합산 = 프로그램 총예산
+    const pairSet=new Set();
+    let totalBudget=0;
+    sameRows.forEach(r=>{
+        const pairK=(r.budget_item||r.category||'');
+        if(!pairSet.has(pairK)){pairSet.add(pairK);totalBudget+=+r.budgeted_amount||0;}
+    });
+    const sumExec=sameRows.filter(r=>r.id!==editingId).reduce((s,r)=>s+(+r.executed_amount||0),0);
+    const remain=totalBudget-sumExec;
+    if(totalBudget>0){
+        const rate=Math.round(sumExec/totalBudget*100);
+        const color=rate>=90?'#dc2626':rate>=70?'#d97706':'#059669';
+        summaryEl.style.display='block';
+        summaryEl.innerHTML=`<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:12px"><span>📌 <strong>${progName}</strong></span><span>총 예산(합계): <strong>${formatMoney(totalBudget)}</strong></span><span>누계 집행: <strong style="color:${color}">${formatMoney(sumExec)}</strong></span><span>잔액: <strong style="color:${remain<0?'#dc2626':'#059669'}">${formatMoney(remain)}</strong></span><span>집행률: <strong style="color:${color}">${rate}%</strong></span></div>`;
+        if(bBudgeted){bBudgeted.readOnly=false;bBudgeted.style.background='';bBudgeted.title='';}
+    }else{
+        summaryEl.style.display='none';
+        if(bBudgeted){bBudgeted.readOnly=false;bBudgeted.style.background='';bBudgeted.title='';}
+    }
+    calcBudgetRate();
+}
+function openBudgetModal(){document.getElementById('budgetId').value='';['bDesc'].forEach(id=>document.getElementById(id).value='');
+    const bBudgeted=document.getElementById('bBudgeted');bBudgeted.value='';bBudgeted.readOnly=false;bBudgeted.style.background='';
+    document.getElementById('bExecuted').value='';document.getElementById('bYear').value=CUR_YEAR;document.getElementById('bMonth').value=CUR_MONTH;document.getElementById('bExecDate').value=getToday();document.getElementById('budgetModalTitle').textContent='예산 추가';
+    const summaryEl=document.getElementById('budgetProgSummary');if(summaryEl)summaryEl.style.display='none';
+    populateProgramSelect(DEPT,'');
+    const bItem=document.getElementById('bBudgetItem');
+    if(bItem && typeof BUDGET_ITEMS!=='undefined'){bItem.innerHTML='<option value="">세목 선택</option>';BUDGET_ITEMS.forEach(item=>{bItem.innerHTML+=`<option value="${item.value}">${item.label}</option>`;});}
+    document.getElementById('budgetModal').classList.add('show');}
+function editBudget(id){const b=allBudget.find(x=>x.id===id);if(!b)return;document.getElementById('budgetId').value=b.id;document.getElementById('budgetModalTitle').textContent='예산 수정';
+    populateProgramSelect(DEPT,b.title||'');
+    const bItem=document.getElementById('bBudgetItem');if(bItem && typeof BUDGET_ITEMS!=='undefined'){bItem.innerHTML='<option value="">세목 선택</option>';BUDGET_ITEMS.forEach(item=>{bItem.innerHTML+=`<option value="${item.value}" ${(b.budget_item||b.category)===item.value?'selected':''}>${item.label}</option>`;});}
+    const bBudgeted=document.getElementById('bBudgeted');bBudgeted.value=b.budgeted_amount||'';bBudgeted.readOnly=false;bBudgeted.style.background='';
+    document.getElementById('bExecuted').value=b.executed_amount||'';document.getElementById('bDesc').value=b.description||'';document.getElementById('bExecDate').value=b.execution_date||'';document.getElementById('bYear').value=b.year||CUR_YEAR;document.getElementById('bMonth').value=b.month||CUR_MONTH;
+    const bProg=document.getElementById('bProgramId');if(bProg)bProg.value=b.program_id||'';
+    onBudgetProgramChange();calcBudgetRate();
+    document.getElementById('budgetModal').classList.add('show');}
+async function saveBudget(){const id=document.getElementById('budgetId').value;const yr=parseInt(document.getElementById('bYear').value)||CUR_YEAR;const mo=parseInt(document.getElementById('bMonth').value)||CUR_MONTH;const bItem=document.getElementById('bBudgetItem');const progSel=document.getElementById('bProgramId');const progId=progSel?progSel.value:'';const prog=allPrograms.find(p=>p.id===progId);const titleVal=getProgramValue('bTitle','bTitleOther');const execAmt=parseFloat(document.getElementById('bExecuted').value)||0;
+    const sameRows=allBudget.filter(r=>r.title===titleVal&&!r.deleted);const pairSet2=new Set();let totalBudget=0;sameRows.forEach(r=>{const pairK=(r.budget_item||r.category||'');if(!pairSet2.has(pairK)){pairSet2.add(pairK);totalBudget+=+r.budgeted_amount||0;}});
+    if(totalBudget>0){const sumExec=sameRows.filter(r=>r.id!==id).reduce((s,r)=>s+(+r.executed_amount||0),0);if(sumExec+execAmt>totalBudget){const over=formatMoney(sumExec+execAmt-totalBudget);if(!confirm(`⚠️ 예산 초과 경고\n잔액: ${formatMoney(totalBudget-sumExec)}\n입력 집행액: ${formatMoney(execAmt)}\n초과 금액: ${over}\n\n계속 저장하시겠습니까?`))return;}}
+    const data={department:DEPT,title:titleVal,budget_item:bItem?bItem.value:'',category:bItem?bItem.value:'',program_id:progId,program_name:prog?prog.name:'',budgeted_amount:parseFloat(document.getElementById('bBudgeted').value)||0,executed_amount:execAmt,description:document.getElementById('bDesc').value,execution_date:document.getElementById('bExecDate').value,assignee_id:user.id,assignee_name:user.name,year:yr,month:mo,quarter:getQuarter(mo)};if(!data.title){alert('세부 프로그램을 선택하세요');return;}if(!data.budget_item){alert('예산 세목을 선택하세요');return;}if(id)await DB.update('budget',id,data);else await DB.create('budget',data);closeModal('budgetModal');await loadAll();showToast('저장되었습니다','success');}
+async function deleteBudget(id){if(!confirm('삭제하시겠습니까?'))return;await DB.remove('budget',id);await loadAll();showToast('삭제되었습니다');}
+
+function openEvalModal(){document.getElementById('evalId').value='';['eTitle','eOrg','eDesc'].forEach(id=>document.getElementById(id).value='');document.getElementById('eYear').value=CUR_YEAR;document.getElementById('eEvalDate').value='';document.getElementById('eDueDate').value='';document.getElementById('evalModalTitle').textContent='평가 추가';document.getElementById('evalModal').classList.add('show');}
+function editEval(id){const e=allEvals.find(x=>x.id===id);if(!e)return;document.getElementById('evalId').value=e.id;document.getElementById('evalModalTitle').textContent='평가 수정';document.getElementById('eType').value=e.eval_type||'internal';document.getElementById('eTitle').value=e.title||'';document.getElementById('eOrg').value=e.organization||'';document.getElementById('eEvalDate').value=e.eval_date||'';document.getElementById('eDueDate').value=e.due_date||'';document.getElementById('eStatus').value=e.status||'preparing';document.getElementById('eYear').value=e.year||CUR_YEAR;document.getElementById('eDesc').value=e.description||'';document.getElementById('evalModal').classList.add('show');}
+async function saveEval(){const id=document.getElementById('evalId').value;const data={department:DEPT,eval_type:document.getElementById('eType').value,title:document.getElementById('eTitle').value.trim(),organization:document.getElementById('eOrg').value,assignee_name:user.name,eval_date:document.getElementById('eEvalDate').value,due_date:document.getElementById('eDueDate').value,status:document.getElementById('eStatus').value,year:parseInt(document.getElementById('eYear').value)||CUR_YEAR,description:document.getElementById('eDesc').value};if(!data.title){alert('평가명을 입력하세요');return;}if(id)await DB.update('evaluations',id,data);else await DB.create('evaluations',data);closeModal('evalModal');await loadAll();showToast('저장되었습니다','success');}
+async function deleteEval(id){if(!confirm('삭제하시겠습니까?'))return;await DB.remove('evaluations',id);await loadAll();showToast('삭제되었습니다');}
+
+function openNoticeModal(){document.getElementById('noticeId').value='';['nTitle','nContent'].forEach(id=>document.getElementById(id).value='');document.getElementById('nDate').value=getToday();document.getElementById('noticeModal').classList.add('show');}
+async function saveNotice(){const id=document.getElementById('noticeId').value;const nDate=document.getElementById('nDate').value;const mo=nDate?getMonth(nDate):CUR_MONTH;const data={department:DEPT,title:document.getElementById('nTitle').value.trim(),content:document.getElementById('nContent').value,severity:document.getElementById('nSeverity').value,date:nDate,author_id:user.id,author_name:user.name,is_confirmed:false,year:CUR_YEAR,month:mo};if(!data.title){alert('제목을 입력하세요');return;}if(id)await DB.update('notices',id,data);else await DB.create('notices',data);closeModal('noticeModal');await loadAll();showToast('특이사항이 등록되었습니다. 팀장 확인을 기다립니다.','success');}
+async function deleteNotice(id){if(!confirm('삭제하시겠습니까?'))return;await DB.remove('notices',id);await loadAll();showToast('삭제되었습니다');}
+
+function closeModal(id){document.getElementById(id).classList.remove('show');}
+function showToast(msg,type=''){const el=document.getElementById('toast');document.getElementById('toastMsg').textContent=msg;el.className='toast show'+(type?' '+type:'');setTimeout(()=>el.classList.remove('show'),2500);}
+function copyMyLink(){
+    const token=(user&&user.token)?user.token:'';
+    if(!token){showToast('링크 정보를 찾을 수 없습니다','error');return;}
+    const base=location.origin+location.pathname.replace('dashboard_comm.html','');
+    const url=`${base}dashboard_comm.html?key=${token}`;
+    navigator.clipboard.writeText(url).then(()=>showToast('내 접근 링크가 복사되었습니다','success'));
+}
+
+/* ── 사이드바 토글 (모바일) ── */
+function toggleSidebar(){
+    const sb=document.querySelector('.sidebar');
+    const ov=document.getElementById('sidebarOverlay');
+    sb.classList.toggle('open');
+    ov.classList.toggle('show');
+}
+function closeSidebar(){
+    const sb=document.querySelector('.sidebar');
+    const ov=document.getElementById('sidebarOverlay');
+    sb.classList.remove('open');
+    ov.classList.remove('show');
+}
+document.querySelectorAll('.nav-item').forEach(el=>{
+    el.addEventListener('click', ()=>{ if(window.innerWidth<=768) closeSidebar(); });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>접근 링크 관리 | 비교과센터 대시보드</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:'Noto Sans KR',sans-serif; background:#f0f4f8; min-height:100vh; color:#1f2937; }
+
+        /* ─── 헤더 ─── */
+        .header {
+            background:linear-gradient(135deg,#1a3a5c 0%,#1e5fa8 100%);
+            color:white; padding:32px 40px 28px;
+        }
+        .header-inner { max-width:960px; margin:0 auto; }
+        .header .tag {
+            display:inline-flex; align-items:center; gap:6px;
+            background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.25);
+            border-radius:20px; padding:4px 14px; font-size:12px; font-weight:600;
+            margin-bottom:14px;
+        }
+        .header h1 { font-size:26px; font-weight:800; margin-bottom:6px; }
+        .header p  { font-size:14px; color:rgba(255,255,255,0.75); line-height:1.6; }
+        .header-actions { margin-top:18px; display:flex; gap:10px; flex-wrap:wrap; }
+        .header-btn {
+            padding:9px 18px; border-radius:10px; font-size:13px; font-weight:600;
+            font-family:'Noto Sans KR',sans-serif; cursor:pointer; border:none;
+            display:inline-flex; align-items:center; gap:7px; transition:all 0.2s;
+        }
+        .btn-white { background:white; color:#1a3a5c; }
+        .btn-white:hover { background:#f0f4f8; }
+        .btn-outline-white { background:transparent; color:white; border:1.5px solid rgba(255,255,255,0.5); }
+        .btn-outline-white:hover { background:rgba(255,255,255,0.1); }
+
+        /* ─── 본문 ─── */
+        .container { max-width:960px; margin:0 auto; padding:32px 24px; }
+
+        /* ─── 설명 박스 ─── */
+        .info-box {
+            background:white; border-radius:14px; padding:20px 24px;
+            margin-bottom:28px; box-shadow:0 2px 8px rgba(0,0,0,0.06);
+            display:flex; align-items:flex-start; gap:16px;
+            border-left:5px solid #0d6efd;
+        }
+        .info-box i { font-size:22px; color:#0d6efd; margin-top:2px; flex-shrink:0; }
+        .info-box h3 { font-size:15px; font-weight:700; color:#1a3a5c; margin-bottom:6px; }
+        .info-box p  { font-size:13px; color:#6b7280; line-height:1.7; }
+
+        /* ─── 섹션 제목 ─── */
+        .section-label {
+            font-size:11px; font-weight:700; color:#9ca3af;
+            letter-spacing:1px; text-transform:uppercase; margin-bottom:12px;
+            display:flex; align-items:center; gap:8px;
+        }
+        .section-label::after { content:''; flex:1; height:1px; background:#e5e7eb; }
+
+        /* ─── 링크 카드 ─── */
+        .link-cards { display:flex; flex-direction:column; gap:12px; margin-bottom:32px; }
+        .link-card {
+            background:white; border-radius:14px;
+            box-shadow:0 2px 8px rgba(0,0,0,0.06);
+            overflow:hidden; border-left:5px solid;
+            transition:box-shadow 0.2s;
+        }
+        .link-card:hover { box-shadow:0 4px 16px rgba(0,0,0,0.1); }
+        .link-card-inner { padding:18px 20px; display:flex; align-items:center; gap:16px; }
+        .user-avatar {
+            width:46px; height:46px; border-radius:12px;
+            display:flex; align-items:center; justify-content:center;
+            font-size:18px; font-weight:700; flex-shrink:0;
+        }
+        .user-meta { flex:1; min-width:0; }
+        .user-meta .name-row { display:flex; align-items:center; gap:8px; margin-bottom:4px; }
+        .user-meta .uname  { font-size:15px; font-weight:700; color:#1f2937; }
+        .user-meta .role-badge {
+            padding:2px 9px; border-radius:20px;
+            font-size:10px; font-weight:700;
+        }
+        .user-meta .dept-name { font-size:12px; color:#9ca3af; margin-bottom:6px; }
+        .url-row {
+            display:flex; align-items:center; gap:8px;
+            background:#f8fafc; border:1.5px solid #e5e7eb;
+            border-radius:8px; padding:7px 12px;
+        }
+        .url-row .url-text {
+            flex:1; font-size:12px; color:#374151;
+            font-family:'Courier New',monospace;
+            white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+        }
+        .url-row .url-text.manager-url { color:#1a3a5c; font-weight:600; }
+        .url-actions { display:flex; gap:6px; flex-shrink:0; }
+        .action-btn {
+            padding:6px 12px; border-radius:7px; font-size:12px; font-weight:600;
+            font-family:'Noto Sans KR',sans-serif; cursor:pointer; border:none;
+            display:inline-flex; align-items:center; gap:5px; transition:all 0.2s;
+            white-space:nowrap;
+        }
+        .btn-copy  { background:#eff6ff; color:#2563eb; }
+        .btn-copy:hover  { background:#dbeafe; }
+        .btn-open  { background:#ecfdf5; color:#059669; }
+        .btn-open:hover  { background:#d1fae5; }
+        .btn-share { background:#fffbeb; color:#d97706; }
+        .btn-share:hover { background:#fef3c7; }
+
+        /* ─── 팀장 자신의 카드 ─── */
+        .manager-card { background:linear-gradient(135deg,#1a3a5c,#1e5fa8); color:white; border-radius:14px; padding:20px 24px; margin-bottom:32px; box-shadow:0 4px 16px rgba(26,58,92,0.25); }
+        .manager-card .title { font-size:13px; font-weight:600; color:rgba(255,255,255,0.65); margin-bottom:10px; display:flex; align-items:center; gap:6px; }
+        .manager-card .url-wrap { background:rgba(255,255,255,0.12); border:1.5px solid rgba(255,255,255,0.2); border-radius:10px; padding:12px 16px; display:flex; align-items:center; gap:12px; }
+        .manager-card .url-wrap code { flex:1; font-size:13px; color:#7dd3fc; font-family:'Courier New',monospace; word-break:break-all; }
+        .manager-card .copy-btn { background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.3); color:white; padding:7px 14px; border-radius:8px; font-size:12px; font-weight:600; font-family:'Noto Sans KR',sans-serif; cursor:pointer; transition:all 0.2s; white-space:nowrap; }
+        .manager-card .copy-btn:hover { background:rgba(255,255,255,0.25); }
+
+        /* ─── 주의사항 ─── */
+        .caution {
+            background:#fffbeb; border:1.5px solid #fde68a; border-radius:12px;
+            padding:16px 20px; margin-bottom:28px;
+            display:flex; gap:12px; align-items:flex-start;
+        }
+        .caution i { color:#d97706; font-size:18px; margin-top:1px; flex-shrink:0; }
+        .caution h4 { font-size:13px; font-weight:700; color:#92400e; margin-bottom:4px; }
+        .caution ul { font-size:12px; color:#78350f; padding-left:16px; line-height:1.9; }
+
+        /* ─── 카피 토스트 ─── */
+        .toast-popup {
+            position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(20px);
+            background:#1f2937; color:white; padding:12px 24px;
+            border-radius:10px; font-size:13px; font-weight:600;
+            box-shadow:0 8px 24px rgba(0,0,0,0.2);
+            opacity:0; transition:all 0.3s; pointer-events:none; z-index:9999;
+            display:flex; align-items:center; gap:8px; white-space:nowrap;
+        }
+        .toast-popup.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+        /* ─── QR 안내 ─── */
+        .qr-hint {
+            background:white; border-radius:14px; padding:20px 24px;
+            box-shadow:0 2px 8px rgba(0,0,0,0.06); margin-bottom:28px;
+        }
+        .qr-hint h3 { font-size:15px; font-weight:700; color:#1a3a5c; margin-bottom:12px; }
+        .share-methods { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+        .share-method {
+            border:1.5px solid #e5e7eb; border-radius:10px; padding:16px;
+            text-align:center;
+        }
+        .share-method .sm-icon { font-size:28px; margin-bottom:8px; display:block; }
+        .share-method h4 { font-size:13px; font-weight:700; color:#1f2937; margin-bottom:4px; }
+        .share-method p  { font-size:11px; color:#9ca3af; line-height:1.5; }
+
+        @media(max-width:640px){
+            .header { padding:24px 20px; }
+            .container { padding:20px 16px; }
+            .link-card-inner { flex-wrap:wrap; }
+            .url-row { flex-wrap:wrap; }
+            .url-actions { width:100%; justify-content:flex-end; }
+            .share-methods { grid-template-columns:1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div class="header-inner">
+        <div class="tag"><i class="fas fa-link"></i> 접근 링크 관리 센터</div>
+        <h1>팀원 접근 링크 관리</h1>
+        <p>각 팀원에게 개인 URL을 공유하면, 로그인 없이 바로 업무 대시보드에 접근할 수 있습니다.<br>
+        링크를 카카오톡, 이메일, 문자 등으로 전달하세요.</p>
+        <div class="header-actions">
+            <button class="header-btn btn-white" onclick="openMyDashboard()">
+                <i class="fas fa-th-large"></i> 내 총괄 대시보드 열기
+            </button>
+            <button class="header-btn btn-outline-white" onclick="copyAllLinks()">
+                <i class="fas fa-copy"></i> 전체 링크 일괄 복사
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+
+    <!-- 현재 운영 URL 안내 배너 -->
+    <div id="urlBanner" style="background:linear-gradient(135deg,#ecfdf5,#d1fae5);border:1.5px solid #6ee7b7;border-radius:14px;padding:18px 22px;margin-bottom:24px;display:flex;align-items:flex-start;gap:14px">
+        <div style="font-size:22px;flex-shrink:0">🌐</div>
+        <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:700;color:#065f46;margin-bottom:6px">현재 대시보드 운영 주소</div>
+            <div style="background:white;border-radius:8px;padding:10px 14px;font-size:12px;font-family:'Courier New',monospace;color:#1a3a5c;word-break:break-all;border:1px solid #a7f3d0;margin-bottom:8px" id="currentBaseUrl"></div>
+            <div style="font-size:12px;color:#047857;line-height:1.7">
+                ✅ 위 주소가 <strong>직원들에게 공유할 링크의 기본 주소</strong>입니다.<br>
+                아래 각 팀원 링크를 복사해서 카카오톡/이메일로 전달하세요.
+            </div>
+        </div>
+        <button onclick="document.getElementById('urlBanner').style.display='none'" style="background:none;border:none;color:#6b7280;cursor:pointer;font-size:16px;flex-shrink:0">✕</button>
+    </div>
+
+    <!-- 내 링크 (팀장) -->
+    <div class="section-label"><i class="fas fa-crown"></i> 내 접근 링크 (팀장)</div>
+    <div class="manager-card">
+        <div class="title"><i class="fas fa-shield-alt"></i> 팀장 총괄 대시보드 전용 링크 — 반드시 안전하게 보관하세요</div>
+        <div class="url-wrap">
+            <code id="managerUrl"></code>
+            <button class="copy-btn" onclick="copyUrl('managerUrl', this)">
+                <i class="fas fa-copy"></i> 복사
+            </button>
+        </div>
+    </div>
+
+    <!-- 주의사항 -->
+    <div class="caution">
+        <i class="fas fa-exclamation-triangle"></i>
+        <div>
+            <h4>링크 보안 주의사항</h4>
+            <ul>
+                <li>각 링크는 <strong>해당 팀원 전용</strong>입니다. 다른 사람에게 공유하지 마세요.</li>
+                <li>링크를 분실하거나 유출되었을 경우, 이 페이지에서 <strong>새 링크를 발급</strong>할 수 있습니다.</li>
+                <li>팀장 링크는 전체 데이터 조회·수정이 가능하므로 <strong>특히 안전하게 관리</strong>하세요.</li>
+                <li>링크는 SNS, 공개 채널에 올리지 말고 <strong>1:1 메시지</strong>로만 전달하세요.</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- 팀원별 링크 -->
+    <div class="section-label"><i class="fas fa-users"></i> 팀원별 접근 링크</div>
+    <div class="link-cards" id="linkCards"></div>
+
+    <!-- 공유 방법 안내 -->
+    <div class="qr-hint">
+        <h3><i class="fas fa-share-alt" style="color:#0d6efd"></i> &nbsp;링크 전달 방법</h3>
+        <div class="share-methods">
+            <div class="share-method">
+                <span class="sm-icon">💬</span>
+                <h4>카카오톡 / 문자</h4>
+                <p>링크를 복사해서<br>1:1 메시지로 전달</p>
+            </div>
+            <div class="share-method">
+                <span class="sm-icon">📧</span>
+                <h4>이메일</h4>
+                <p>학교 이메일로<br>개인 링크 발송</p>
+            </div>
+            <div class="share-method">
+                <span class="sm-icon">📋</span>
+                <h4>QR코드</h4>
+                <p>URL을 QR 생성 사이트에<br>입력 → 출력해서 전달<br><span style="font-size:10px;color:#0d6efd">qr.io 등 무료 사이트 이용</span></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 링크 재발급 안내 -->
+    <div class="info-box">
+        <i class="fas fa-sync-alt"></i>
+        <div>
+            <h3>링크 재발급이 필요한 경우</h3>
+            <p>
+                팀원이 링크를 분실하거나 보안 우려가 생겼을 때는,
+                <code style="background:#f0f4f8;padding:2px 6px;border-radius:4px;font-size:12px">js/common.js</code> 파일의
+                토큰 값을 변경하면 즉시 기존 링크가 무효화되고 새 링크가 생성됩니다.<br>
+                변경 후 이 페이지에서 새 링크를 팀원에게 재전달하세요.
+            </p>
+        </div>
+    </div>
+
+</div><!-- /container -->
+
+<div class="toast-popup" id="toastPopup">
+    <i class="fas fa-check-circle" style="color:#10b981"></i>
+    <span id="toastMsg">클립보드에 복사되었습니다</span>
+</div>
+
+<script>
+// 이 페이지 자체는 토큰 없이 접근 가능 (팀장만 URL을 알고 있음)
+// 실 운영에서는 이 페이지도 팀장 토큰으로 보호 가능
+
+const BASE = window.location.origin + window.location.pathname.replace('admin.html','');
+
+// 현재 운영 주소 배너에 표시
+const bannerEl = document.getElementById('currentBaseUrl');
+if(bannerEl) bannerEl.textContent = BASE;
+
+// 팀원 링크 정보
+const TEAM_LINKS = [
+    {
+        token: 'SYS-2026-A3nLwE8cZu',
+        name: '최진아', position: '직원',
+        dept: '비교과통합관리시스템', deptKey: 'system',
+        page: 'dashboard_system.html',
+        color: '#7c3aed', bg: '#f5f3ff', icon: '🖥️',
+        avatarBg: '#f5f3ff', avatarColor: '#7c3aed'
+    },
+    {
+        token: 'RC-2026-B7qYmF2dVs',
+        name: '이명옥', position: '직원',
+        dept: 'RC 프로그램', deptKey: 'rc',
+        page: 'dashboard_rc.html',
+        color: '#059669', bg: '#ecfdf5', icon: '🏠',
+        avatarBg: '#ecfdf5', avatarColor: '#059669'
+    },
+    {
+        token: 'COM1-2026-C4rHkG5eWn',
+        name: '김자영', position: '연구원',
+        dept: '의사소통 교육 프로그램', deptKey: 'communication',
+        page: 'dashboard_comm.html',
+        color: '#d97706', bg: '#fffbeb', icon: '💬',
+        avatarBg: '#fffbeb', avatarColor: '#d97706'
+    },
+    {
+        token: 'COM2-2026-D8sTjI9fXo',
+        name: '이진우', position: '연구원',
+        dept: '의사소통 교육 프로그램', deptKey: 'communication',
+        page: 'dashboard_comm.html',
+        color: '#d97706', bg: '#fffbeb', icon: '💬',
+        avatarBg: '#fffbeb', avatarColor: '#d97706'
+    },
+    {
+        token: 'COM3-2026-E2uUlJ6gYp',
+        name: '김진국', position: '연구원',
+        dept: '의사소통 교육 프로그램', deptKey: 'communication',
+        page: 'dashboard_comm.html',
+        color: '#d97706', bg: '#fffbeb', icon: '💬',
+        avatarBg: '#fffbeb', avatarColor: '#d97706'
+    },
+    {
+        token: 'COM4-2026-F6vVmK3hZq',
+        name: '손대익', position: '연구원',
+        dept: '의사소통 교육 프로그램', deptKey: 'communication',
+        page: 'dashboard_comm.html',
+        color: '#d97706', bg: '#fffbeb', icon: '💬',
+        avatarBg: '#fffbeb', avatarColor: '#d97706'
+    },
+];
+
+const MGR_TOKEN = 'MGR-2026-K9mXpQ7vRt';
+
+// 팀장 URL
+const mgrUrl = `${BASE}dashboard_manager.html?key=${MGR_TOKEN}`;
+document.getElementById('managerUrl').textContent = mgrUrl;
+
+// 팀원 카드 렌더링
+function renderCards() {
+    const container = document.getElementById('linkCards');
+    container.innerHTML = TEAM_LINKS.map((m, i) => {
+        const url = `${BASE}${m.page}?key=${m.token}`;
+        const roleLabel = m.position === '연구원' ? '연구원' : '직원';
+        const roleBg = m.position === '연구원' ? '#fffbeb' : '#eff6ff';
+        const roleColor = m.position === '연구원' ? '#d97706' : '#2563eb';
+        return `
+        <div class="link-card" style="border-color:${m.color}">
+            <div class="link-card-inner">
+                <div class="user-avatar" style="background:${m.avatarBg};color:${m.avatarColor}">
+                    ${m.icon}
+                </div>
+                <div class="user-meta">
+                    <div class="name-row">
+                        <span class="uname">${m.name}</span>
+                        <span class="role-badge" style="background:${roleBg};color:${roleColor}">${roleLabel}</span>
+                        <span class="role-badge" style="background:${m.bg};color:${m.color}">${m.dept}</span>
+                    </div>
+                    <div class="url-row">
+                        <span class="url-text" id="url-${i}">${url}</span>
+                        <div class="url-actions">
+                            <button class="action-btn btn-copy" onclick="copyUrl('url-${i}', this)">
+                                <i class="fas fa-copy"></i> 복사
+                            </button>
+                            <button class="action-btn btn-open" onclick="window.open('${url}','_blank')">
+                                <i class="fas fa-external-link-alt"></i> 열기
+                            </button>
+                            <button class="action-btn btn-share" onclick="shareUrl('${url}', '${m.name}')">
+                                <i class="fas fa-share"></i> 공유
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+renderCards();
+
+// ─── 유틸 함수 ───
+function copyUrl(elId, btn) {
+    const text = document.getElementById(elId).textContent;
+    navigator.clipboard.writeText(text).then(() => {
+        showToast('클립보드에 복사되었습니다 ✓');
+        if (btn) {
+            const orig = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-check"></i> 복사됨';
+            btn.style.background = '#d1fae5';
+            btn.style.color = '#059669';
+            setTimeout(() => {
+                btn.innerHTML = orig;
+                btn.style.background = '';
+                btn.style.color = '';
+            }, 2000);
+        }
+    });
+}
+
+function copyAllLinks() {
+    const allLinks = [`[비교과센터 업무 대시보드 접근 링크]\n`];
+    allLinks.push(`📌 팀장: ${mgrUrl}\n`);
+    TEAM_LINKS.forEach(m => {
+        const url = `${BASE}${m.page}?key=${m.token}`;
+        allLinks.push(`• ${m.name} (${m.dept}): ${url}`);
+    });
+    navigator.clipboard.writeText(allLinks.join('\n')).then(() => {
+        showToast('전체 링크가 클립보드에 복사되었습니다');
+    });
+}
+
+function shareUrl(url, name) {
+    const text = `[비교과센터 업무 대시보드]\n${name}님의 개인 접근 링크입니다:\n${url}`;
+    if (navigator.share) {
+        navigator.share({ title: '비교과센터 대시보드', text, url });
+    } else {
+        navigator.clipboard.writeText(text).then(() => {
+            showToast(`${name}님 링크가 복사되었습니다`);
+        });
+    }
+}
+
+function openMyDashboard() {
+    window.open(`dashboard_manager.html?key=${MGR_TOKEN}`, '_blank');
+}
+
+function showToast(msg) {
+    const el = document.getElementById('toastPopup');
+    document.getElementById('toastMsg').textContent = msg;
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 2500);
+}
+</script>
+</body>
+</html>
