@@ -148,11 +148,13 @@ const DEPT_PROGRAMS = {
     ],
     rc: [
         'RC-Bridge',
+        'RC-Markers',
         'RC-10minutes',
         'RC-특강',
         'RC-인사이트',
         'RC-초급 영어회화',
         'RC-봉사활동',
+        'RC-나만의 학습법',
         'RC-운영관리',
     ],
     communication: [
