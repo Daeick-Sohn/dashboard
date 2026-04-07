@@ -679,7 +679,7 @@ function renderBudget(){
             <td><strong>${b.program_id?progName(b.program_id):'-'}</strong></td>
             <td><strong>${b.title||'-'}</strong></td>
             <td>${typeof budgetItemBadge!=='undefined'?budgetItemBadge(itemName):`<span style="font-size:12px;color:#6b7280">${itemName}</span>`}</td>
-            <td style="font-size:13px;text-align:right">${formatMoney(progTotalBudget)}</td>
+            <td style="font-size:13px;text-align:right">${formatMoney(+b.budgeted_amount||0)}</td>
             <td style="font-size:13px;font-weight:600;color:#1e40af;text-align:right">${formatMoney(+b.executed_amount||0)}</td>
             <td style="font-size:12px;text-align:right;color:${color}">${formatMoney(running.cumExec)}</td>
             <td style="font-size:13px;text-align:right;color:${running.remain<0?'#dc2626':'#6b7280'}">${formatMoney(running.remain)}</td>
