@@ -556,48 +556,43 @@ function renderBudget(){
     const progF=document.getElementById('budgetProgramFilter')?.value;
     if(progF) budget=budget.filter(b=>(b.title||'')===progF);
 
-    // 프로그램별 최신 예산액 맵 (allBudget 기준, updated_at 가장 최근 1건)
-    const progBudgetMap=new Map();
+    // ── 예산액: 프로그램+세목 단위로 합산 (중복 없이) ──
+    const pairBudgetMap=new Map(); // key: 'title|budget_item'
     allBudget.filter(r=>!r.deleted).forEach(r=>{
-        const k=r.title||'';const amt=+r.budgeted_amount||0;
+        const k=(r.title||'')+'|'+(r.budget_item||r.category||'');
+        const amt=+r.budgeted_amount||0;
         if(amt>0){
-            const cur=progBudgetMap.get(k);
+            const cur=pairBudgetMap.get(k);
             if(!cur||(r.updated_at||r.created_at||0)>(cur.ts||0))
-                progBudgetMap.set(k,{amt,ts:r.updated_at||r.created_at||0});
+                pairBudgetMap.set(k,{amt,ts:r.updated_at||r.created_at||0});
         }
     });
-    // 통계: 예산액은 표시된 프로그램별 중복 제거
-    const progSet=new Set(budget.map(b=>b.title||''));
-    const totalB=[...progSet].reduce((s,p)=>s+(progBudgetMap.get(p)?.amt||0),0);
+
+    // ── 통계 카드: 예산액 합산 (표시된 항목 기준, 쌍 중복 제거) ──
+    const pairSet=new Set(budget.map(b=>(b.title||'')+'|'+(b.budget_item||b.category||'')));
+    const totalB=[...pairSet].reduce((s,k)=>s+(pairBudgetMap.get(k)?.amt||0),0);
     const totalE=budget.reduce((s,b)=>s+(+b.executed_amount||0),0);
     const rate=pct(totalE,totalB);
+
     document.getElementById('budgetStatGrid').innerHTML=`
         <div class="stat-card" style="border-color:#6366f1"><div class="stat-icon" style="background:#eef2ff;color:#6366f1"><i class="fas fa-money-bill"></i></div><div class="stat-info"><div class="label">총 예산액</div><div class="value" style="font-size:18px">${formatMoney(totalB)}</div></div></div>
         <div class="stat-card" style="border-color:#059669"><div class="stat-icon" style="background:#ecfdf5;color:#059669"><i class="fas fa-check-circle"></i></div><div class="stat-info"><div class="label">총 집행액</div><div class="value" style="font-size:18px">${formatMoney(totalE)}</div></div></div>
         <div class="stat-card" style="border-color:#d97706"><div class="stat-icon" style="background:#fffbeb;color:#d97706"><i class="fas fa-percent"></i></div><div class="stat-info"><div class="label">집행률</div><div class="value">${rate}%</div><div style="margin-top:6px"><div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${rate}%;background:${DEPT_COLOR}"></div></div></div></div></div>`;
-    // 세목별 집계: (세목, 프로그램) 쌍으로 예산액 1회만 합산
+
+    // ── 세목별 집계표: 프로그램+세목 쌍으로 예산액 1회만 합산 ──
     const allFiltered=getFiltered(allBudget);
     const iBody=document.getElementById('budgetItemBody');
     if(iBody && typeof BUDGET_ITEMS!=='undefined'){
-        // allBudget에서 프로그램별 최신 예산액 확정
-        const progLB=new Map();
-        allBudget.filter(r=>!r.deleted).forEach(r=>{
-            const k=r.title||'';const amt=+r.budgeted_amount||0;
-            if(amt>0){
-                const cur=progLB.get(k);
-                if(!cur||(r.updated_at||r.created_at||0)>(cur.ts||0))
-                    progLB.set(k,{amt,ts:r.updated_at||r.created_at||0});
-            }
-        });
-        const g={};BUDGET_ITEMS.forEach(item=>{g[item.value]={b:0,e:0};});
-        const addedPairs={};
+        const g={};
+        BUDGET_ITEMS.forEach(item=>{g[item.value]={b:0,e:0};});
+        const addedPairs=new Set();
         allFiltered.forEach(b=>{
             const key=b.budget_item||b.category||'기타';
             if(!g[key])g[key]={b:0,e:0};
-            const pKey=key+'|'+(b.title||'');
-            if(!addedPairs[pKey]){
-                addedPairs[pKey]=true;
-                g[key].b+=(progLB.get(b.title||'')?.amt||0);
+            const pKey=(b.title||'')+'|'+key;
+            if(!addedPairs.has(pKey)){
+                addedPairs.add(pKey);
+                g[key].b+=+b.budgeted_amount||0;
             }
             g[key].e+=+b.executed_amount||0;
         });
@@ -610,44 +605,59 @@ function renderBudget(){
             const color=r>=90?'#dc2626':r>=70?'#d97706':'#059669';
             iRows+=`<tr><td style="white-space:nowrap">${budgetItemBadge(item.label||item.value)}</td><td style="text-align:right;white-space:nowrap">${formatMoney(d.b)}</td><td style="text-align:right;font-weight:600;color:${color};white-space:nowrap">${formatMoney(d.e)}</td><td style="text-align:right;color:${d.b-d.e<0?'#dc2626':'#6b7280'};white-space:nowrap">${formatMoney(d.b-d.e)}</td><td style="text-align:center"><div style="display:inline-flex;align-items:center;gap:6px"><div class="progress-bar-wrap" style="width:60px"><div class="progress-bar-fill" style="width:${r}%;background:${color}"></div></div><span style="font-size:11px;font-weight:600;color:${color}">${r}%</span></div></td></tr>`;
         });
-        if(grandB>0){const gr=Math.round(grandE/grandB*100);const gc=gr>=90?'#dc2626':gr>=70?'#d97706':'#059669';iRows+=`<tr style="font-weight:700;background:#f8fafc"><td>합계</td><td style="text-align:right;white-space:nowrap">${formatMoney(grandB)}</td><td style="text-align:right;color:${gc};white-space:nowrap">${formatMoney(grandE)}</td><td style="text-align:right;color:${grandB-grandE<0?'#dc2626':'#6b7280'};white-space:nowrap">${formatMoney(grandB-grandE)}</td><td style="text-align:center;color:${gc}">${gr}%</td></tr>`;}
+        if(grandB>0){
+            const gr=Math.round(grandE/grandB*100);
+            const gc=gr>=90?'#dc2626':gr>=70?'#d97706':'#059669';
+            iRows+=`<tr style="font-weight:700;background:#f8fafc"><td>합계</td><td style="text-align:right;white-space:nowrap">${formatMoney(grandB)}</td><td style="text-align:right;color:${gc};white-space:nowrap">${formatMoney(grandE)}</td><td style="text-align:right;color:${grandB-grandE<0?'#dc2626':'#6b7280'};white-space:nowrap">${formatMoney(grandB-grandE)}</td><td style="text-align:center;color:${gc}">${gr}%</td></tr>`;
+        }
         iBody.innerHTML=iRows||'<tr><td colspan="5" style="text-align:center;color:#9ca3af">데이터 없음</td></tr>';
     }
-    // 프로그램별 날짜순 running total 계산
-    const progRunningMap=new Map();
-    const progGroups={};
+
+    // ── 집행 내역 테이블: 프로그램+세목 단위로 누계 계산 ──
+    const progItemGroups={};
     allBudget.filter(r=>!r.deleted).forEach(r=>{
-        const k=r.title||'';
-        if(!progGroups[k])progGroups[k]=[];
-        progGroups[k].push(r);
+        const k=(r.title||'')+'|'+(r.budget_item||r.category||'');
+        if(!progItemGroups[k])progItemGroups[k]=[];
+        progItemGroups[k].push(r);
     });
-    Object.entries(progGroups).forEach(([prog,rows])=>{
+    const runningMap=new Map();
+    Object.entries(progItemGroups).forEach(([key,rows])=>{
         rows.sort((a,b)=>{
             const da=a.execution_date||a.created_at||'';
             const db=b.execution_date||b.created_at||'';
             return da<db?-1:da>db?1:0;
         });
-        const totalBudget=progBudgetMap.get(prog)?.amt||0;
+        const itemBudget=pairBudgetMap.get(key)?.amt||0;
         let cumExec=0;
         rows.forEach(r=>{
             cumExec+=(+r.executed_amount||0);
-            progRunningMap.set(r.id,{cumExec,remain:totalBudget-cumExec,rate:totalBudget>0?Math.min(Math.round(cumExec/totalBudget*100),999):0});
+            runningMap.set(r.id,{
+                cumExec,
+                remain:itemBudget-cumExec,
+                rate:itemBudget>0?Math.min(Math.round(cumExec/itemBudget*100),999):0
+            });
         });
     });
+
     const tbody=document.getElementById('budgetTableBody');
     const progName=id=>{const p=allPrograms.find(x=>x.id===id);return p?p.name:'-';};
-    if(!budget.length){tbody.innerHTML=`<tr><td colspan="11"><div class="empty-state"><i class="fas fa-inbox"></i><p>등록된 예산 내역이 없습니다</p></div></td></tr>`;return;}
-    // 프로그램명 오름차순 → 날짜 오름차순 정렬 (running total 순서와 일치)
+    if(!budget.length){
+        tbody.innerHTML=`<tr><td colspan="11"><div class="empty-state"><i class="fas fa-inbox"></i><p>등록된 예산 내역이 없습니다</p></div></td></tr>`;
+        return;
+    }
     budget.sort((a,b)=>{
         const ta=a.title||'',tb=b.title||'';
         if(ta<tb)return -1;if(ta>tb)return 1;
+        const ia=(a.budget_item||a.category||''),ib=(b.budget_item||b.category||'');
+        if(ia<ib)return -1;if(ia>ib)return 1;
         const da=a.execution_date||a.created_at||'';
         const db=b.execution_date||b.created_at||'';
         return da<db?-1:da>db?1:0;
     });
     tbody.innerHTML=budget.map(b=>{
-        const progTotalBudget=progBudgetMap.get(b.title||'')?.amt||0;
-        const running=progRunningMap.get(b.id)||{cumExec:0,remain:progTotalBudget,rate:0};
+        const pairKey=(b.title||'')+'|'+(b.budget_item||b.category||'');
+        const itemBudget=pairBudgetMap.get(pairKey)?.amt||0;
+        const running=runningMap.get(b.id)||{cumExec:0,remain:itemBudget,rate:0};
         const r=running.rate;
         const color=r>=90?'#dc2626':r>=70?'#d97706':'#059669';
         const itemName=b.budget_item||b.category||'-';
@@ -655,7 +665,7 @@ function renderBudget(){
             <td><strong>${b.program_id?progName(b.program_id):'-'}</strong></td>
             <td><strong>${b.title||'-'}</strong></td>
             <td>${budgetItemBadge(itemName)}</td>
-            <td style="font-size:13px;text-align:right">${formatMoney(+b.budgeted_amount||0)}</td>
+            <td style="font-size:13px;text-align:right">${formatMoney(itemBudget)}</td>
             <td style="font-size:13px;font-weight:600;color:#1e40af;text-align:right">${formatMoney(+b.executed_amount||0)}</td>
             <td style="font-size:12px;text-align:right;color:${color}">${formatMoney(running.cumExec)}</td>
             <td style="font-size:13px;text-align:right;color:${running.remain<0?'#dc2626':'#6b7280'}">${formatMoney(running.remain)}</td>
@@ -663,7 +673,9 @@ function renderBudget(){
             <td style="font-size:12px">${formatDate(b.execution_date)}</td>
             <td style="font-size:11px;color:#9ca3af;max-width:120px">${b.description||''}</td>
             <td><button class="btn btn-outline btn-sm" onclick="editBudget('${b.id}')"><i class="fas fa-edit"></i></button><button class="btn btn-danger btn-sm" onclick="deleteBudget('${b.id}')"><i class="fas fa-trash"></i></button></td>
-        </tr>`;}).join('');
+        </tr>`;
+    }).join('');
+}
 }
 
 function renderEvals(){
