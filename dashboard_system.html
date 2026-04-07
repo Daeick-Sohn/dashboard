@@ -7,6 +7,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <link rel="stylesheet" href="css/common.css">
     <script src="js/budget_categories.js"></script>
     <script src="js/excel_export.js"></script>
@@ -163,6 +164,8 @@
                             <option value="">전체 프로그램</option>
                             <!-- 프로그램 목록은 loadAll()에서 동적으로 채워짐 -->
                         </select>
+                        <input type="file" id="budgetExcelInput" accept=".xlsx,.xls" style="display:none" onchange="uploadBudgetExcel(this)">
+                        <button class="btn btn-sm" style="background:#16a34a;color:white" onclick="document.getElementById('budgetExcelInput').click()"><i class="fas fa-file-upload"></i> 예산 일괄 업로드</button>
                         <button class="btn btn-sm" style="background:#7c3aed;color:white" onclick="openBudgetModal()"><i class="fas fa-plus"></i> 추가</button>
                         <button class="btn btn-sm" style="background:#059669;color:white" onclick="ExcelExport.downloadBudget(allBudget,currentView,currentPeriod,currentYear,DEPT)"><i class="fas fa-file-excel"></i> 다운로드</button>
                     </div>
@@ -637,22 +640,23 @@ function renderBudget(){
     const itemF=document.getElementById('budgetItemFilter')?.value;
     const progF=document.getElementById('budgetProgramFilter')?.value;
     if(itemF) budget=budget.filter(b=>b.budget_item===itemF);
-    if(progF) budget=budget.filter(b=>(b.title||'')=== progF);
+    if(progF) budget=budget.filter(b=>(b.title||'')===progF);
 
-    // 프로그램별 최신 예산액 맵 (allBudget 기준, updated_at 가장 최근 1건)
-    const progBudgetMap = new Map();
+    // ── 예산액: 프로그램+세목 단위로 합산 (중복 없이) ──
+    const pairBudgetMap=new Map();
     allBudget.filter(r=>!r.deleted).forEach(r=>{
-        const key=r.title||'';
+        const k=(r.title||'')+'|'+(r.budget_item||'');
         const amt=+r.budgeted_amount||0;
         if(amt>0){
-            const cur=progBudgetMap.get(key);
-            if(!cur || (r.updated_at||r.created_at||0)>(cur.ts||0))
-                progBudgetMap.set(key,{amt,ts:r.updated_at||r.created_at||0});
+            const cur=pairBudgetMap.get(k);
+            if(!cur||(r.updated_at||r.created_at||0)>(cur.ts||0))
+                pairBudgetMap.set(k,{amt,ts:r.updated_at||r.created_at||0});
         }
     });
-    // 통계: 예산액은 프로그램별 중복 제거 (표시된 프로그램 목록 기준)
-    const progSet=new Set(budget.map(b=>b.title||''));
-    const totalB=[...progSet].reduce((s,p)=>s+(progBudgetMap.get(p)?.amt||0),0);
+
+    // ── 통계 카드 ──
+    const pairSet=new Set(budget.map(b=>(b.title||'')+'|'+(b.budget_item||'')));
+    const totalB=[...pairSet].reduce((s,k)=>s+(pairBudgetMap.get(k)?.amt||0),0);
     const totalE=budget.reduce((s,b)=>s+(+b.executed_amount||0),0);
     const rate=pct(totalE,totalB);
     document.getElementById('budgetStatGrid').innerHTML=`
@@ -660,67 +664,138 @@ function renderBudget(){
         <div class="stat-card" style="border-color:#059669"><div class="stat-icon" style="background:#ecfdf5;color:#059669"><i class="fas fa-check-circle"></i></div><div class="stat-info"><div class="label">총 집행액</div><div class="value" style="font-size:16px">${formatMoney(totalE)}</div></div></div>
         <div class="stat-card" style="border-color:#dc2626"><div class="stat-icon" style="background:#fef2f2;color:#dc2626"><i class="fas fa-minus-circle"></i></div><div class="stat-info"><div class="label">잔액</div><div class="value" style="font-size:16px">${formatMoney(totalB-totalE)}</div></div></div>
         <div class="stat-card" style="border-color:#d97706"><div class="stat-icon" style="background:#fffbeb;color:#d97706"><i class="fas fa-percent"></i></div><div class="stat-info"><div class="label">집행률</div><div class="value">${rate}%</div><div style="margin-top:6px"><div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${rate}%;background:${DEPT_COLOR}"></div></div></div></div></div>`;
-    const tbody=document.getElementById('budgetTableBody');
-    if(!budget.length){tbody.innerHTML=`<tr><td colspan="11"><div class="empty-state"><i class="fas fa-inbox"></i><p>등록된 예산 내역이 없습니다</p></div></td></tr>`;return;}
 
-    // 프로그램별 누계 집행액 맵 (allBudget 전체 기준)
-    // 프로그램별 날짜 순 정렬 후 running total 계산
-    // allBudget 전체를 프로그램별로 날짜순 정렬하여 누계 맵 생성
-    const progRunningMap = new Map(); // key: b.id -> {cumExec, remain}
-    const progGroups = {};
+    const tbody=document.getElementById('budgetTableBody');
+    if(!budget.length){
+        tbody.innerHTML=`<tr><td colspan="11"><div class="empty-state"><i class="fas fa-inbox"></i><p>등록된 예산 내역이 없습니다</p></div></td></tr>`;
+        return;
+    }
+
+    // ── 프로그램+세목 단위로 누계 계산 ──
+    const progItemGroups={};
     allBudget.filter(r=>!r.deleted).forEach(r=>{
-        const k = r.title||'';
-        if(!progGroups[k]) progGroups[k]=[];
-        progGroups[k].push(r);
+        const k=(r.title||'')+'|'+(r.budget_item||'');
+        if(!progItemGroups[k])progItemGroups[k]=[];
+        progItemGroups[k].push(r);
     });
-    Object.entries(progGroups).forEach(([prog, rows])=>{
-        // 날짜 오름차순 정렬 (execution_date 없으면 created_at 기준)
+    const runningMap=new Map();
+    Object.entries(progItemGroups).forEach(([key,rows])=>{
         rows.sort((a,b)=>{
-            const da = a.execution_date||a.created_at||'';
-            const db = b.execution_date||b.created_at||'';
-            return da < db ? -1 : da > db ? 1 : 0;
+            const da=a.execution_date||a.created_at||'';
+            const db=b.execution_date||b.created_at||'';
+            return da<db?-1:da>db?1:0;
         });
-        const totalBudget = progBudgetMap.get(prog)?.amt||0;
-        let cumExec = 0;
+        const itemBudget=pairBudgetMap.get(key)?.amt||0;
+        let cumExec=0;
         rows.forEach(r=>{
-            cumExec += (+r.executed_amount||0);
-            progRunningMap.set(r.id, {
+            cumExec+=(+r.executed_amount||0);
+            runningMap.set(r.id,{
                 cumExec,
-                remain: totalBudget - cumExec,
-                rate: totalBudget>0 ? Math.min(Math.round(cumExec/totalBudget*100),999) : 0
+                remain:itemBudget-cumExec,
+                rate:itemBudget>0?Math.min(Math.round(cumExec/itemBudget*100),999):0
             });
         });
     });
 
-    // 프로그램명 오름차순 → 날짜 오름차순 정렬 (running total 순서와 일치)
     budget.sort((a,b)=>{
-        const ta=a.title||'', tb=b.title||'';
-        if(ta<tb)return -1; if(ta>tb)return 1;
+        const ta=a.title||'',tb=b.title||'';
+        if(ta<tb)return -1;if(ta>tb)return 1;
+        const ia=a.budget_item||'',ib=b.budget_item||'';
+        if(ia<ib)return -1;if(ia>ib)return 1;
         const da=a.execution_date||a.created_at||'';
         const db=b.execution_date||b.created_at||'';
         return da<db?-1:da>db?1:0;
     });
     tbody.innerHTML=budget.map(b=>{
-        const progTotalBudget = progBudgetMap.get(b.title||'')?.amt||0;
-        const running = progRunningMap.get(b.id)||{cumExec:0,remain:progTotalBudget,rate:0};
-        const cumExec = running.cumExec;
-        const remain = running.remain;
-        const r = running.rate;
+        const pairKey=(b.title||'')+'|'+(b.budget_item||'');
+        const itemBudget=pairBudgetMap.get(pairKey)?.amt||0;
+        const running=runningMap.get(b.id)||{cumExec:0,remain:itemBudget,rate:0};
+        const r=running.rate;
         const color=r>=90?'#dc2626':r>=70?'#d97706':'#059669';
         const prog=allPrograms.find(p=>p.id===b.program_id);
         return `<tr>
             <td style="font-size:12px;color:#7c3aed;font-weight:600">${prog?prog.name:'-'}</td>
             <td><strong>${b.title||'-'}</strong></td>
             <td>${budgetItemBadge(b.budget_item)}</td>
-            <td style="font-size:13px;text-align:right">${formatMoney(progTotalBudget)}</td>
+            <td style="font-size:13px;text-align:right">${formatMoney(itemBudget)}</td>
             <td style="font-size:13px;font-weight:600;color:#1e40af;text-align:right">${formatMoney(+b.executed_amount||0)}</td>
-            <td style="font-size:12px;text-align:right;color:${color}">${formatMoney(cumExec)}</td>
-            <td style="font-size:13px;text-align:right;color:${remain<0?'#dc2626':'#6b7280'}">${formatMoney(remain)}</td>
+            <td style="font-size:12px;text-align:right;color:${color}">${formatMoney(running.cumExec)}</td>
+            <td style="font-size:13px;text-align:right;color:${running.remain<0?'#dc2626':'#6b7280'}">${formatMoney(running.remain)}</td>
             <td><div style="display:flex;align-items:center;gap:4px"><div class="progress-bar-wrap" style="width:50px"><div class="progress-bar-fill" style="width:${Math.min(r,100)}%;background:${color}"></div></div><span style="font-size:11px;font-weight:600;color:${color}">${r}%</span></div></td>
             <td style="font-size:12px">${formatDate(b.execution_date)}</td>
             <td style="font-size:11px;color:#9ca3af;max-width:120px">${b.description||''}</td>
             <td><button class="btn btn-outline btn-sm" onclick="editBudget('${b.id}')"><i class="fas fa-edit"></i></button><button class="btn btn-danger btn-sm" onclick="deleteBudget('${b.id}')"><i class="fas fa-trash"></i></button></td>
-        </tr>`;}).join('');
+        </tr>`;
+    }).join('');
+}
+
+// ── 예산 엑셀 일괄 업로드 ──
+async function uploadBudgetExcel(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            const parsed = [];
+            for (let i = 1; i < rows.length; i++) {
+                const row = rows[i];
+                const prog = (row[0] || '').toString().trim();
+                const item = (row[1] || '').toString().trim();
+                const amount = parseFloat(row[2]) || 0;
+                if (!prog || !item) continue;
+                parsed.push({ prog, item, amount });
+            }
+            if (parsed.length === 0) {
+                alert('업로드할 데이터가 없습니다. 엑셀 형식을 확인해 주세요.');
+                input.value = ''; return;
+            }
+            if (!confirm(`총 ${parsed.length}개 항목을 업로드합니다.\n기존에 같은 프로그램+세목 데이터가 있으면 덮어씁니다.\n\n계속하시겠습니까?`)) {
+                input.value = ''; return;
+            }
+            const existing = await DB.getAll('budget');
+            const deptExisting = existing.filter(r => !r.deleted && r.department === DEPT);
+            let updated = 0, created = 0;
+            for (const item of parsed) {
+                const match = deptExisting.find(r =>
+                    (r.title || '').trim() === item.prog &&
+                    (r.budget_item || r.category || '').trim() === item.item
+                );
+                const budgetItemObj = typeof BUDGET_ITEMS !== 'undefined'
+                    ? BUDGET_ITEMS.find(b => b.label === item.item || b.value === item.item)
+                    : null;
+                const budgetItemVal = budgetItemObj ? budgetItemObj.value : item.item;
+                const saveData = {
+                    department: DEPT,
+                    title: item.prog,
+                    budget_item: budgetItemVal,
+                    category: budgetItemVal,
+                    budgeted_amount: item.amount,
+                    executed_amount: match ? (+match.executed_amount || 0) : 0,
+                    assignee_id: user.id,
+                    assignee_name: user.name,
+                    year: currentYear,
+                    month: currentPeriod || CUR_MONTH,
+                    quarter: getQuarter(currentPeriod || CUR_MONTH),
+                    description: '',
+                    execution_date: '',
+                };
+                if (match) { await DB.update('budget', match.id, saveData); updated++; }
+                else { await DB.create('budget', saveData); created++; }
+            }
+            input.value = '';
+            await loadAll();
+            showToast(`업로드 완료! 신규 ${created}건 / 수정 ${updated}건`, 'success');
+        } catch (err) {
+            console.error(err);
+            alert('엑셀 파일을 읽는 중 오류가 발생했습니다.');
+            input.value = '';
+        }
+    };
+    reader.readAsArrayBuffer(file);
 }
 
 function renderPrograms(){
