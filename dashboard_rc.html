@@ -676,8 +676,7 @@ function renderBudget(){
         </tr>`;
     }).join('');
 }
-}
-
+    
 function renderEvals(){
     const evals=allEvals.filter(e=>!currentYear||e.year==currentYear);
     const tbody=document.getElementById('evalsTableBody');
