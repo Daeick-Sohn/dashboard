@@ -7,6 +7,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <link rel="stylesheet" href="css/common.css">
     <style>
         .dept-badge { display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:20px;font-size:13px;font-weight:700;background:#ecfdf5;color:#059669; }
@@ -148,9 +149,11 @@
             <div class="card">
                 <div class="card-header">
                     <div class="card-title"><i class="fas fa-won-sign" style="color:#059669"></i>예산 집행 내역</div>
+                    <input type="file" id="budgetExcelInput" accept=".xlsx,.xls" style="display:none" onchange="uploadBudgetExcel(this)">
                     <div style="display:flex;gap:8px;flex-wrap:wrap">
                         <select id="budgetItemFilter" onchange="renderBudget()" style="padding:6px 10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:12px;font-family:'Noto Sans KR',sans-serif"><option value="">전체 세목</option></select>
                         <select id="budgetProgramFilter" onchange="renderBudget()" style="padding:6px 10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:12px;font-family:'Noto Sans KR',sans-serif"><option value="">전체 프로그램</option></select>
+                        <button class="btn btn-sm" style="background:#16a34a;color:white" onclick="document.getElementById('budgetExcelInput').click()"><i class="fas fa-file-upload"></i> 예산 일괄 업로드</button>
                         <button class="btn btn-sm" style="background:#059669;color:white" onclick="openBudgetModal()"><i class="fas fa-plus"></i> 추가</button>
                         <button class="btn btn-sm" style="background:#065f46;color:white" onclick="ExcelExport.downloadBudget(allBudget,currentView,currentPeriod,currentYear,DEPT)"><i class="fas fa-file-excel"></i> 다운로드</button>
                     </div>
@@ -831,7 +834,97 @@ async function deleteEval(id){if(!confirm('삭제하시겠습니까?'))return;aw
 function openNoticeModal(){document.getElementById('noticeId').value='';['nTitle','nContent'].forEach(id=>document.getElementById(id).value='');document.getElementById('nDate').value=getToday();document.getElementById('noticeModal').classList.add('show');}
 async function saveNotice(){const id=document.getElementById('noticeId').value;const nDate=document.getElementById('nDate').value;const mo=nDate?getMonth(nDate):CUR_MONTH;const data={department:DEPT,title:document.getElementById('nTitle').value.trim(),content:document.getElementById('nContent').value,severity:document.getElementById('nSeverity').value,date:nDate,author_id:user.id,author_name:user.name,is_confirmed:false,year:CUR_YEAR,month:mo};if(!data.title){alert('제목을 입력하세요');return;}if(id)await DB.update('notices',id,data);else await DB.create('notices',data);closeModal('noticeModal');await loadAll();showToast('특이사항이 등록되었습니다. 팀장 확인을 기다립니다.','success');}
 async function deleteNotice(id){if(!confirm('삭제하시겠습니까?'))return;await DB.remove('notices',id);await loadAll();showToast('삭제되었습니다');}
+// ── 예산 엑셀 일괄 업로드 ──────────────────────────────
+async function uploadBudgetExcel(input) {
+    const file = input.files[0];
+    if (!file) return;
 
+    // SheetJS로 파일 읽기
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+            // 헤더 제외하고 데이터 파싱
+            const parsed = [];
+            for (let i = 1; i < rows.length; i++) {
+                const row = rows[i];
+                const prog = (row[0] || '').toString().trim();
+                const item = (row[1] || '').toString().trim();
+                const amount = parseFloat(row[2]) || 0;
+                if (!prog || !item) continue; // 빈 행 스킵
+                parsed.push({ prog, item, amount });
+            }
+
+            if (parsed.length === 0) {
+                alert('업로드할 데이터가 없습니다. 엑셀 형식을 확인해 주세요.');
+                input.value = '';
+                return;
+            }
+
+            // 확인 메시지
+            const msg = `총 ${parsed.length}개 항목을 업로드합니다.\n기존에 같은 프로그램+세목 데이터가 있으면 덮어씁니다.\n\n계속하시겠습니까?`;
+            if (!confirm(msg)) { input.value = ''; return; }
+
+            // 기존 예산 데이터 불러오기
+            const existing = await DB.getAll('budget');
+            const deptExisting = existing.filter(r => !r.deleted && r.department === DEPT);
+
+            let updated = 0, created = 0;
+
+            for (const item of parsed) {
+                // 같은 프로그램+세목 찾기
+                const match = deptExisting.find(r =>
+                    (r.title || '').trim() === item.prog &&
+                    (r.budget_item || r.category || '').trim() === item.item
+                );
+
+                // BUDGET_ITEMS에서 세목 value 찾기
+                const budgetItemObj = typeof BUDGET_ITEMS !== 'undefined'
+                    ? BUDGET_ITEMS.find(b => b.label === item.item || b.value === item.item)
+                    : null;
+                const budgetItemVal = budgetItemObj ? budgetItemObj.value : item.item;
+
+                const saveData = {
+                    department: DEPT,
+                    title: item.prog,
+                    budget_item: budgetItemVal,
+                    category: budgetItemVal,
+                    budgeted_amount: item.amount,
+                    executed_amount: match ? (+match.executed_amount || 0) : 0,
+                    assignee_id: user.id,
+                    assignee_name: user.name,
+                    year: currentYear,
+                    month: currentPeriod || CUR_MONTH,
+                    quarter: getQuarter(currentPeriod || CUR_MONTH),
+                    description: '',
+                    execution_date: '',
+                };
+
+                if (match) {
+                    await DB.update('budget', match.id, saveData);
+                    updated++;
+                } else {
+                    await DB.create('budget', saveData);
+                    created++;
+                }
+            }
+
+            input.value = ''; // 파일 입력 초기화
+            await loadAll();
+            showToast(`업로드 완료! 신규 ${created}건 / 수정 ${updated}건`, 'success');
+
+        } catch (err) {
+            console.error(err);
+            alert('엑셀 파일을 읽는 중 오류가 발생했습니다.\n파일 형식을 확인해 주세요.');
+            input.value = '';
+        }
+    };
+    reader.readAsArrayBuffer(file);
+}
 function closeModal(id){document.getElementById(id).classList.remove('show');}
 function showToast(msg,type=''){const el=document.getElementById('toast');document.getElementById('toastMsg').textContent=msg;el.className='toast show'+(type?' '+type:'');setTimeout(()=>el.classList.remove('show'),2500);}
 function copyMyLink(){
