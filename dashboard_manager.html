@@ -7,6 +7,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <link rel="stylesheet" href="css/common.css">
     <script src="js/budget_categories.js"></script>
     <script src="js/excel_export.js"></script>
@@ -188,6 +189,7 @@
             <div class="card">
                 <div class="card-header">
                     <div class="card-title"><i class="fas fa-won-sign"></i>예산 집행 내역</div>
+                    <input type="file" id="budgetExcelInput" accept=".xlsx,.xls" style="display:none" onchange="uploadBudgetExcel(this)">
                     <div style="display:flex;gap:8px;flex-wrap:wrap">
                         <select id="budgetItemFilter" onchange="renderBudget()" style="padding:6px 10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:12px;font-family:'Noto Sans KR',sans-serif">
                             <option value="">전체 세목</option>
@@ -195,6 +197,7 @@
                         <select id="budgetProgramFilter" onchange="renderBudget()" style="padding:6px 10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:12px;font-family:'Noto Sans KR',sans-serif">
                             <option value="">전체 세부프로그램</option>
                         </select>
+                        <button class="btn btn-sm" style="background:#1d4ed8;color:white" onclick="document.getElementById('budgetExcelInput').click()"><i class="fas fa-file-upload"></i> 예산 일괄 업로드</button>
                         <button class="btn btn-primary btn-sm" onclick="openBudgetModal()"><i class="fas fa-plus"></i> 내역 추가</button>
                         <button class="btn btn-sm" style="background:#059669;color:white" onclick="ExcelExport.downloadBudget(getFiltered(allBudget),currentView,currentPeriod,currentYear,currentDept)"><i class="fas fa-file-excel"></i> 집행내역 다운로드</button>
                         <button class="btn btn-sm" style="background:#7c3aed;color:white" onclick="ExcelExport.downloadTasks(getFiltered(allTasks),currentView,currentPeriod,currentYear,currentDept)"><i class="fas fa-file-excel"></i> 과제목록 다운로드</button>
@@ -343,15 +346,21 @@
         <div class="form-cols">
             <div class="form-row">
                 <label>예산 세목 *</label>
-                <select id="bBudgetItem">
+                <select id="bBudgetItem" onchange="onBudgetItemChange()">
                     <option value="">세목 선택</option>
                 </select>
             </div>
             <div class="form-row"><label>집행일</label><input type="date" id="bExecDate"></div>
         </div>
         <div class="form-cols">
-            <div class="form-row"><label>예산액 (원) *</label><input type="number" id="bBudgeted" placeholder="0"></div>
-            <div class="form-row"><label>집행액 (원) *</label><input type="number" id="bExecuted" placeholder="0"></div>
+            <div class="form-row"><label>예산액 (원) *</label><input type="number" id="bBudgeted" placeholder="0" oninput="calcBudgetRate()"></div>
+            <div class="form-row"><label>집행액 (원) *</label><input type="number" id="bExecuted" placeholder="0" oninput="calcBudgetRate()"></div>
+        </div>
+        <div style="background:#f0f4f8;border-radius:8px;padding:10px 14px;margin:4px 0 10px;font-size:13px;display:flex;align-items:center;gap:12px">
+            <span style="color:#6b7280">집행률:</span>
+            <strong id="bRateDisplay" style="color:#2563eb;font-size:16px">0%</strong>
+            <span style="color:#6b7280">잔액:</span>
+            <strong id="bRemainDisplay" style="color:#059669">0원</strong>
         </div>
         <div class="form-cols">
             <div class="form-row"><label>연도</label><input type="number" id="bYear" min="2020" max="2030"></div>
@@ -493,9 +502,7 @@ function initYearSel() {
         sel.innerHTML += `<option value="${y}" ${y===CUR_YEAR?'selected':''}>${y}년</option>`;
     }
 }
-function initPeriodSel() {
-    updatePeriodSel();
-}
+function initPeriodSel() { updatePeriodSel(); }
 function updatePeriodSel() {
     const sel = document.getElementById('periodSel');
     sel.innerHTML = '';
@@ -605,7 +612,6 @@ function populateBudgetProgramFilter(){
     const sel=document.getElementById('budgetProgramFilter');
     if(!sel)return;
     const cur=sel.value;
-    // currentDept가 'all'이면 전체 부서, 특정 부서 선택 시 해당 부서 title만
     const filtered = allBudget.filter(r=>
         !r.deleted && r.title &&
         (currentDept==='all' || r.department===currentDept)
@@ -624,17 +630,14 @@ function renderOverview() {
     const done  = tasks.filter(t=>t.status==='done').length;
     const inpro = tasks.filter(t=>t.status==='in_progress').length;
     const delayed = tasks.filter(t=>t.status==='delayed').length;
-    // 예산액: 프로그램별 최신 1건만 합산 (중복 누적 방지)
-    const _pbMap = new Map();
-    allBudget.filter(r=>!r.deleted).forEach(r=>{
-        const k=r.title||''; const amt=+r.budgeted_amount||0;
-        if(amt>0){ const cur=_pbMap.get(k); if(!cur||(r.updated_at||r.created_at||0)>(cur.ts||0)) _pbMap.set(k,{amt,ts:r.updated_at||r.created_at||0}); }
-    });
-    const _progSet = new Set(budget.map(b=>b.title||''));
-    const totalBudget  = [..._progSet].reduce((s,p)=>s+(_pbMap.get(p)?.amt||0),0);
-    const totalExec    = budget.reduce((s,b)=>s+(+b.executed_amount||0),0);
-    const execRate     = pct(totalExec, totalBudget);
-    const unconfirmed  = notices.filter(n=>!n.is_confirmed).length;
+
+    // 예산액: 프로그램+세목 쌍 기준 중복 제거 합산
+    const pairBudgetMap = buildPairBudgetMap(allBudget);
+    const pairSet = new Set(budget.map(b=>(b.title||'')+'|'+(b.budget_item||b.category||'')));
+    const totalBudget = [...pairSet].reduce((s,k)=>s+(pairBudgetMap.get(k)?.amt||0),0);
+    const totalExec = budget.reduce((s,b)=>s+(+b.executed_amount||0),0);
+    const execRate = pct(totalExec, totalBudget);
+    const unconfirmed = notices.filter(n=>!n.is_confirmed).length;
 
     document.getElementById('statGrid').innerHTML = `
         <div class="stat-card" style="border-color:#2563eb">
@@ -679,12 +682,10 @@ function renderOverview() {
         </div>
     `;
 
-    // 차트 - 업무 진행
     const statusData = ['todo','in_progress','done','delayed'].map(s=>tasks.filter(t=>t.status===s).length);
     renderTaskChart(statusData);
     renderBudgetChart(getFiltered(allBudget));
 
-    // 최근 과제
     const urgentTasks = tasks.filter(t=>t.status!=='done').sort((a,b)=>{
         const p = {high:0,medium:1,low:2};
         return (p[a.priority]||1)-(p[b.priority]||1);
@@ -696,7 +697,6 @@ function renderOverview() {
             <span style="font-size:11px;color:#9ca3af">${formatDate(t.due_date)}</span>
         </div>`).join('') : '<div class="empty-state"><i class="fas fa-check-circle"></i><p>완료되지 않은 과제가 없습니다</p></div>';
 
-    // 미확인 특이사항
     const unconfirmedList = filterByDept(allNotices).filter(n=>!n.is_confirmed).slice(0,5);
     document.getElementById('recentNoticesList').innerHTML = unconfirmedList.length ? unconfirmedList.map(n=>`
         <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f0f0f0">
@@ -726,19 +726,20 @@ function renderTaskChart(data) {
 function renderBudgetChart(budgetData) {
     const depts = ['system','rc','communication'];
     const labels = ['비교과통합시스템','RC 프로그램','의사소통 교육'];
-    // 예산액: 부서별 프로그램별 최신 budgeted_amount 1회만 합산 (누적 방지)
+    // 예산액: 부서별 프로그램+세목 쌍 기준 중복 제거 합산
     const budgeted = depts.map(d => {
         const deptRows = allBudget.filter(r=>!r.deleted && r.department===d);
-        const progMap = new Map();
+        const pairMap = new Map();
         deptRows.forEach(r=>{
-            const k=r.title||''; const amt=+r.budgeted_amount||0;
+            const k=(r.title||'')+'|'+(r.budget_item||r.category||'');
+            const amt=+r.budgeted_amount||0;
             if(amt>0){
-                const cur=progMap.get(k);
+                const cur=pairMap.get(k);
                 if(!cur||(r.updated_at||r.created_at||0)>(cur.ts||0))
-                    progMap.set(k,{amt,ts:r.updated_at||r.created_at||0});
+                    pairMap.set(k,{amt,ts:r.updated_at||r.created_at||0});
             }
         });
-        return [...progMap.values()].reduce((s,v)=>s+v.amt,0);
+        return [...pairMap.values()].reduce((s,v)=>s+v.amt,0);
     });
     const executed = depts.map(d=>budgetData.filter(b=>b.department===d).reduce((s,b)=>s+(+b.executed_amount||0),0));
     const ctx = document.getElementById('budgetChart').getContext('2d');
@@ -760,6 +761,22 @@ function renderBudgetChart(budgetData) {
     });
 }
 
+// ======== 핵심 헬퍼: 프로그램+세목 쌍 단위 예산액 맵 ========
+// key: 'title|budget_item', value: {amt, ts}
+function buildPairBudgetMap(rows) {
+    const map = new Map();
+    rows.filter(r=>!r.deleted).forEach(r=>{
+        const k = (r.title||'')+'|'+(r.budget_item||r.category||'');
+        const amt = +r.budgeted_amount||0;
+        if(amt > 0){
+            const cur = map.get(k);
+            if(!cur || (r.updated_at||r.created_at||0) > (cur.ts||0))
+                map.set(k, {amt, ts: r.updated_at||r.created_at||0});
+        }
+    });
+    return map;
+}
+
 // ---- 업무 과제 ----
 function renderTasks() {
     let tasks = getFiltered(allTasks);
@@ -767,7 +784,6 @@ function renderTasks() {
     const priorityF = document.getElementById('taskPriorityFilter')?.value;
     if(statusF) tasks = tasks.filter(t=>t.status===statusF);
     if(priorityF) tasks = tasks.filter(t=>t.priority===priorityF);
-    const CATEGORY_KOR = {labor:'인건비',project:'사업비',operation:'운영비',education:'교육비',etc:'기타'};
     const tbody = document.getElementById('tasksTableBody');
     tbody.innerHTML = tasks.length ? tasks.map(t=>`
         <tr>
@@ -793,21 +809,15 @@ function renderBudget() {
     const progF = document.getElementById('budgetProgramFilter')?.value;
     if(progF) budget = budget.filter(b => (b.title||'') === progF);
 
-    // 프로그램별 최신 예산액 맵 (allBudget 기준, updated_at 가장 최근 1건)
-    const progBudgetMap = new Map();
-    allBudget.filter(r=>!r.deleted).forEach(r=>{
-        const k=r.title||''; const amt=+r.budgeted_amount||0;
-        if(amt>0){
-            const cur=progBudgetMap.get(k);
-            if(!cur||(r.updated_at||r.created_at||0)>(cur.ts||0))
-                progBudgetMap.set(k,{amt,ts:r.updated_at||r.created_at||0});
-        }
-    });
-    // 통계: 예산액은 표시된 프로그램별 중복 제거
-    const progSet = new Set(budget.map(b=>b.title||''));
-    const totalB = [...progSet].reduce((s,p)=>s+(progBudgetMap.get(p)?.amt||0),0);
+    // ── 프로그램+세목 쌍 단위 예산액 맵 (잔액 버그 수정 핵심) ──
+    const pairBudgetMap = buildPairBudgetMap(allBudget);
+
+    // 통계: 표시된 항목 기준 예산액 합산 (쌍 중복 제거)
+    const pairSet = new Set(budget.map(b=>(b.title||'')+'|'+(b.budget_item||b.category||'')));
+    const totalB = [...pairSet].reduce((s,k)=>s+(pairBudgetMap.get(k)?.amt||0),0);
     const totalE = budget.reduce((s,b)=>s+(+b.executed_amount||0),0);
     const rate = pct(totalE,totalB);
+
     document.getElementById('budgetStatGrid').innerHTML = `
         <div class="stat-card" style="border-color:#6366f1">
             <div class="stat-icon" style="background:#eef2ff;color:#6366f1"><i class="fas fa-money-bill-wave"></i></div>
@@ -827,28 +837,31 @@ function renderBudget() {
         </div>`;
 
     // 세목별 집계 표
-    const allBudgetFiltered = getFiltered(allBudget);
-    renderBudgetItemTable(allBudgetFiltered);
+    renderBudgetItemTable(getFiltered(allBudget));
 
-    // 프로그램별 날짜순 running total 계산
-    const progRunningMap = new Map();
-    const progGroups = {};
+    // ── 프로그램+세목 쌍 단위 running total 계산 ──
+    const progItemGroups = {};
     allBudget.filter(r=>!r.deleted).forEach(r=>{
-        const k=r.title||'';
-        if(!progGroups[k]) progGroups[k]=[];
-        progGroups[k].push(r);
+        const k = (r.title||'')+'|'+(r.budget_item||r.category||'');
+        if(!progItemGroups[k]) progItemGroups[k]=[];
+        progItemGroups[k].push(r);
     });
-    Object.entries(progGroups).forEach(([prog,rows])=>{
+    const runningMap = new Map();
+    Object.entries(progItemGroups).forEach(([key, rows])=>{
         rows.sort((a,b)=>{
             const da=a.execution_date||a.created_at||'';
             const db=b.execution_date||b.created_at||'';
             return da<db?-1:da>db?1:0;
         });
-        const totalBudget=progBudgetMap.get(prog)?.amt||0;
-        let cumExec=0;
+        const itemBudget = pairBudgetMap.get(key)?.amt || 0;
+        let cumExec = 0;
         rows.forEach(r=>{
-            cumExec+=(+r.executed_amount||0);
-            progRunningMap.set(r.id,{cumExec,remain:totalBudget-cumExec,rate:totalBudget>0?Math.min(Math.round(cumExec/totalBudget*100),999):0});
+            cumExec += (+r.executed_amount||0);
+            runningMap.set(r.id, {
+                cumExec,
+                remain: itemBudget - cumExec,
+                rate: itemBudget > 0 ? Math.min(Math.round(cumExec/itemBudget*100), 999) : 0
+            });
         });
     });
 
@@ -857,18 +870,19 @@ function renderBudget() {
         tbody.innerHTML=`<tr><td colspan="11"><div class="empty-state"><i class="fas fa-inbox"></i><p>등록된 예산 내역이 없습니다</p></div></td></tr>`;
         return;
     }
-    // 프로그램명 오름차순 → 날짜 오름차순 정렬 (running total 순서와 일치)
     budget.sort((a,b)=>{
         const ta=a.title||'',tb=b.title||'';
         if(ta<tb)return -1;if(ta>tb)return 1;
+        const ia=(a.budget_item||a.category||''),ib=(b.budget_item||b.category||'');
+        if(ia<ib)return -1;if(ia>ib)return 1;
         const da=a.execution_date||a.created_at||'';
         const db=b.execution_date||b.created_at||'';
         return da<db?-1:da>db?1:0;
     });
     tbody.innerHTML = budget.map(b=>{
-        const progTotalBudget = progBudgetMap.get(b.title||'')?.amt||0;
-        const thisExec = +b.executed_amount||0;
-        const running = progRunningMap.get(b.id)||{cumExec:0,remain:progTotalBudget,rate:0};
+        const pairKey = (b.title||'')+'|'+(b.budget_item||b.category||'');
+        const itemBudget = pairBudgetMap.get(pairKey)?.amt || 0;
+        const running = runningMap.get(b.id) || {cumExec:0, remain:itemBudget, rate:0};
         const r = running.rate;
         const color = r>=90?'#dc2626':r>=70?'#d97706':'#059669';
         const itemName = b.budget_item || b.category || '-';
@@ -876,8 +890,8 @@ function renderBudget() {
             <td>${badge(DEPT_MAP,b.department)}</td>
             <td><strong style="font-size:13px">${b.title||'-'}</strong></td>
             <td>${typeof budgetItemBadge !== 'undefined' ? budgetItemBadge(itemName) : `<span style="font-size:12px;color:#6b7280">${itemName}</span>`}</td>
-            <td style="font-size:13px;text-align:right">${formatMoney(+b.budgeted_amount||0)}</td>
-            <td style="font-size:13px;font-weight:600;color:#1e40af;text-align:right">${formatMoney(thisExec)}</td>
+            <td style="font-size:13px;text-align:right">${formatMoney(itemBudget)}</td>
+            <td style="font-size:13px;font-weight:600;color:#1e40af;text-align:right">${formatMoney(+b.executed_amount||0)}</td>
             <td style="font-size:12px;text-align:right;color:${color}">${formatMoney(running.cumExec)}</td>
             <td style="font-size:13px;text-align:right;color:${running.remain<0?'#dc2626':'#6b7280'}">${formatMoney(running.remain)}</td>
             <td>
@@ -898,29 +912,22 @@ function renderBudget() {
 
 function renderBudgetItemTable(budget) {
     const tbody = document.getElementById('budgetItemBody');
-    if(!tbody) return;
-    if(typeof BUDGET_ITEMS === 'undefined') return;
-    // allBudget에서 프로그램별 최신 예산액 확정
-    const progLB = new Map();
-    allBudget.filter(r=>!r.deleted).forEach(r=>{
-        const k=r.title||''; const amt=+r.budgeted_amount||0;
-        if(amt>0){
-            const cur=progLB.get(k);
-            if(!cur||(r.updated_at||r.created_at||0)>(cur.ts||0))
-                progLB.set(k,{amt,ts:r.updated_at||r.created_at||0});
-        }
-    });
-    // 세목+(프로그램) 쌍으로 예산액 1회만 합산, 집행액은 누계
+    if(!tbody || typeof BUDGET_ITEMS === 'undefined') return;
+
+    // 프로그램+세목 쌍 단위 예산액 맵
+    const pairBudgetMap = buildPairBudgetMap(allBudget);
+
     const grouped = {};
     BUDGET_ITEMS.forEach(item => { grouped[item.value] = { b:0, e:0 }; });
-    const addedPairs = {};
+    const addedPairs = new Set();
     budget.forEach(b => {
         const key = b.budget_item || b.category || '기타';
         if(!grouped[key]) grouped[key] = { b:0, e:0 };
         const pKey = key+'|'+(b.title||'');
-        if(!addedPairs[pKey]){
-            addedPairs[pKey]=true;
-            grouped[key].b += (progLB.get(b.title||'')?.amt||0);
+        if(!addedPairs.has(pKey)){
+            addedPairs.add(pKey);
+            const pairKey = (b.title||'')+'|'+key;
+            grouped[key].b += pairBudgetMap.get(pairKey)?.amt || 0;
         }
         grouped[key].e += +b.executed_amount || 0;
     });
@@ -1010,7 +1017,101 @@ function updateUnconfirmedBadge() {
     el.style.display = cnt > 0 ? 'inline' : 'none';
 }
 
-// ---- 모달 ----
+// ---- 예산 모달 관련 ----
+function calcBudgetRate() {
+    const b = parseFloat(document.getElementById('bBudgeted').value)||0;
+    const e = parseFloat(document.getElementById('bExecuted').value)||0;
+    const rEl = document.getElementById('bRateDisplay');
+    const remEl = document.getElementById('bRemainDisplay');
+    if(rEl) rEl.textContent = pct(e,b)+'%';
+    if(remEl) remEl.textContent = formatMoney(b-e);
+}
+
+// 세부 프로그램 선택 시 요약 표시
+function onBudgetProgramChange(){
+    const progName = getProgramValue('bTitle','bTitleOther');
+    const summaryEl = document.getElementById('budgetProgSummary');
+    const bBudgeted = document.getElementById('bBudgeted');
+    if(!progName || !summaryEl){ if(summaryEl) summaryEl.style.display='none'; return; }
+
+    const deptVal = document.getElementById('bDept').value||'system';
+    const editingId = document.getElementById('budgetId').value;
+    const selectedItem = document.getElementById('bBudgetItem').value;
+
+    const sameRows = allBudget.filter(r=>r.title===progName && r.department===deptVal && !r.deleted);
+
+    // 프로그램+세목 쌍 단위 총 예산 합산
+    const pairSet = new Set();
+    let totalBudget = 0;
+    sameRows.forEach(r=>{
+        const pairK = (r.budget_item||r.category||'');
+        if(!pairSet.has(pairK)){ pairSet.add(pairK); totalBudget += +r.budgeted_amount||0; }
+    });
+
+    const sumExec = sameRows.filter(r=>r.id!==editingId).reduce((s,r)=>s+(+r.executed_amount||0),0);
+    const remain = totalBudget - sumExec;
+
+    if(totalBudget > 0){
+        const rate = Math.round(sumExec/totalBudget*100);
+        const color = rate>=90?'#dc2626':rate>=70?'#d97706':'#059669';
+        summaryEl.style.display='block';
+        summaryEl.innerHTML=`<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:12px">
+            <span>📌 <strong>${progName}</strong></span>
+            <span>총 예산(합계): <strong>${formatMoney(totalBudget)}</strong></span>
+            <span>누계 집행: <strong style="color:${color}">${formatMoney(sumExec)}</strong></span>
+            <span>잔액: <strong style="color:${remain<0?'#dc2626':'#059669'}">${formatMoney(remain)}</strong></span>
+            <span>집행률: <strong style="color:${color}">${rate}%</strong></span>
+        </div>`;
+    } else {
+        summaryEl.style.display='none';
+    }
+
+    // 세목도 선택된 경우 해당 세목의 예산액 자동 입력
+    onBudgetItemChange();
+}
+
+// 세목 선택 시 해당 프로그램+세목의 예산액 자동 입력
+function onBudgetItemChange(){
+    const progName = getProgramValue('bTitle','bTitleOther');
+    const selectedItem = document.getElementById('bBudgetItem').value;
+    const bBudgeted = document.getElementById('bBudgeted');
+    const editingId = document.getElementById('budgetId').value;
+
+    if(!progName || !selectedItem){
+        if(bBudgeted){ bBudgeted.readOnly=false; bBudgeted.style.background=''; bBudgeted.title=''; }
+        calcBudgetRate();
+        return;
+    }
+
+    const deptVal = document.getElementById('bDept').value||'system';
+    // 해당 프로그램+세목 조합의 등록된 예산액 찾기
+    const matchRows = allBudget.filter(r=>
+        r.title===progName &&
+        (r.budget_item||r.category||'')===selectedItem &&
+        r.department===deptVal &&
+        !r.deleted &&
+        (+r.budgeted_amount||0) > 0
+    );
+
+    if(matchRows.length > 0){
+        // 가장 최근 수정된 행의 예산액 사용
+        matchRows.sort((a,b)=>(b.updated_at||b.created_at||0)-(a.updated_at||a.created_at||0));
+        const amt = +matchRows[0].budgeted_amount||0;
+        // 수정 중인 행이 아닌 경우에만 자동 입력 (수정 시에는 기존값 유지)
+        if(!editingId && bBudgeted){
+            bBudgeted.value = amt;
+            bBudgeted.readOnly = true;
+            bBudgeted.style.background = '#f3f4f6';
+            bBudgeted.title = '업로드된 예산액입니다. 직접 수정하려면 클릭하세요';
+            bBudgeted.onclick = function(){ this.readOnly=false; this.style.background=''; this.title=''; };
+        }
+    } else {
+        if(bBudgeted){ bBudgeted.readOnly=false; bBudgeted.style.background=''; bBudgeted.title=''; bBudgeted.onclick=null; }
+    }
+    calcBudgetRate();
+}
+
+// ---- 모달 열기/닫기 ----
 function openTaskModal() {
     document.getElementById('taskId').value='';
     document.getElementById('taskModalTitle').textContent='과제 추가';
@@ -1020,7 +1121,6 @@ function openTaskModal() {
     document.getElementById('tMonth').value=CUR_MONTH;
     document.getElementById('tStartDate').value=getToday();
     document.getElementById('tDueDate').value='';
-    // 기본 부서(system)의 프로그램 목록으로 초기화
     const dept = document.getElementById('tDept').value || 'system';
     if(typeof populateTaskProgramSelect !== 'undefined') populateTaskProgramSelect(dept, '');
     document.getElementById('taskModal').classList.add('show');
@@ -1031,7 +1131,6 @@ function editTask(id) {
     document.getElementById('taskId').value=t.id;
     document.getElementById('taskModalTitle').textContent='과제 수정';
     document.getElementById('tDept').value=t.department||'system';
-    // 해당 부서 프로그램 목록 채우고 저장된 과제명 선택
     if(typeof populateTaskProgramSelect !== 'undefined') populateTaskProgramSelect(t.department||'system', t.title||'');
     document.getElementById('tDesc').value=t.description||'';
     document.getElementById('tPriority').value=t.priority||'medium';
@@ -1041,7 +1140,6 @@ function editTask(id) {
     document.getElementById('tYear').value=t.year||CUR_YEAR;
     document.getElementById('tMonth').value=t.month||CUR_MONTH;
     document.getElementById('tNote').value=t.note||'';
-    // 담당자
     const sel=document.getElementById('tAssignee');
     for(let o of sel.options){ if(o.value===t.assignee_id){ o.selected=true; break; } }
     document.getElementById('taskModal').classList.add('show');
@@ -1085,7 +1183,7 @@ function onBudgetDeptChange() {
     const summaryEl=document.getElementById('budgetProgSummary');
     if(summaryEl) summaryEl.style.display='none';
     const bBudgeted=document.getElementById('bBudgeted');
-    if(bBudgeted){bBudgeted.readOnly=false;bBudgeted.style.background='';}
+    if(bBudgeted){bBudgeted.readOnly=false;bBudgeted.style.background='';bBudgeted.value='';}
 }
 
 function onTaskDeptChange() {
@@ -1093,39 +1191,11 @@ function onTaskDeptChange() {
     if(typeof populateTaskProgramSelect !== 'undefined') populateTaskProgramSelect(dept, '');
 }
 
-function onBudgetProgramChange(){
-    const progName=getProgramValue('bTitle','bTitleOther');
-    const summaryEl=document.getElementById('budgetProgSummary');
-    const bBudgeted=document.getElementById('bBudgeted');
-    if(!progName||!summaryEl){if(summaryEl)summaryEl.style.display='none';return;}
-    const editingId=document.getElementById('budgetId').value;
-    const deptVal=document.getElementById('bDept').value||'system';
-    const sameRows=allBudget.filter(r=>r.title===progName&&r.department===deptVal&&!r.deleted);
-    // 가장 최근 수정된 budgeted_amount를 총 예산으로 사용
-    let latestRow=null;
-    sameRows.forEach(r=>{
-        const amt=+r.budgeted_amount||0;
-        if(amt>0){if(!latestRow||(r.updated_at||r.created_at||0)>(latestRow.updated_at||latestRow.created_at||0))latestRow=r;}
-    });
-    const totalBudget=latestRow?(+latestRow.budgeted_amount||0):0;
-    const sumExec=sameRows.filter(r=>r.id!==editingId).reduce((s,r)=>s+(+r.executed_amount||0),0);
-    const remain=totalBudget-sumExec;
-    if(totalBudget>0){
-        const rate=Math.round(sumExec/totalBudget*100);
-        const color=rate>=90?'#dc2626':rate>=70?'#d97706':'#059669';
-        summaryEl.style.display='block';
-        summaryEl.innerHTML=`<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:12px"><span>📌 <strong>${progName}</strong></span><span>총 예산: <strong>${formatMoney(totalBudget)}</strong></span><span>누계 집행: <strong style="color:${color}">${formatMoney(sumExec)}</strong></span><span>잔액: <strong style="color:${remain<0?'#dc2626':'#059669'}">${formatMoney(remain)}</strong></span><span>집행률: <strong style="color:${color}">${rate}%</strong></span></div>`;
-        if(bBudgeted){bBudgeted.value=totalBudget;bBudgeted.readOnly=true;bBudgeted.style.background='#f3f4f6';bBudgeted.title='예산액은 이 프로그램의 등록된 예산입니다';}
-    }else{
-        summaryEl.style.display='none';
-        if(bBudgeted){bBudgeted.readOnly=false;bBudgeted.style.background='';bBudgeted.title='';}
-    }
-}
-
 function openBudgetModal() {
     document.getElementById('budgetId').value='';
     document.getElementById('budgetModalTitle').textContent='예산 내역 추가';
-    document.getElementById('bBudgeted').value='';
+    const bBudgeted=document.getElementById('bBudgeted');
+    bBudgeted.value=''; bBudgeted.readOnly=false; bBudgeted.style.background=''; bBudgeted.onclick=null;
     document.getElementById('bExecuted').value='';
     document.getElementById('bDesc').value='';
     document.getElementById('bYear').value=CUR_YEAR;
@@ -1133,9 +1203,12 @@ function openBudgetModal() {
     document.getElementById('bExecDate').value=getToday();
     const bItem = document.getElementById('bBudgetItem');
     if(bItem) bItem.value='';
-    // 부서에 맞는 세부 프로그램 목록
+    const summaryEl=document.getElementById('budgetProgSummary');
+    if(summaryEl) summaryEl.style.display='none';
     const dept = document.getElementById('bDept').value || 'system';
     if(typeof populateProgramSelect !== 'undefined') populateProgramSelect(dept, '');
+    const rEl=document.getElementById('bRateDisplay'); if(rEl) rEl.textContent='0%';
+    const remEl=document.getElementById('bRemainDisplay'); if(remEl) remEl.textContent='0원';
     document.getElementById('budgetModal').classList.add('show');
 }
 function editBudget(id) {
@@ -1148,7 +1221,7 @@ function editBudget(id) {
     const bItem = document.getElementById('bBudgetItem');
     if(bItem) bItem.value = b.budget_item || b.category || '';
     const bBudgeted=document.getElementById('bBudgeted');
-    bBudgeted.value=b.budgeted_amount||'';bBudgeted.readOnly=false;bBudgeted.style.background='';
+    bBudgeted.value=b.budgeted_amount||''; bBudgeted.readOnly=false; bBudgeted.style.background=''; bBudgeted.onclick=null;
     document.getElementById('bExecuted').value=b.executed_amount||'';
     document.getElementById('bDesc').value=b.description||'';
     document.getElementById('bExecDate').value=b.execution_date||'';
@@ -1157,6 +1230,7 @@ function editBudget(id) {
     const sel=document.getElementById('bAssignee');
     for(let o of sel.options){ if(o.value===b.assignee_id){ o.selected=true; break; } }
     onBudgetProgramChange();
+    calcBudgetRate();
     document.getElementById('budgetModal').classList.add('show');
 }
 async function saveBudget() {
@@ -1168,11 +1242,15 @@ async function saveBudget() {
     const budgetItemSel = document.getElementById('bBudgetItem');
     const titleVal = getProgramValue('bTitle','bTitleOther');
     const execAmt=parseFloat(document.getElementById('bExecuted').value)||0;
-    // 집행 잔액 초과 검증 (부서별 분리)
-    const deptVal2=document.getElementById('bDept').value||'system';
-    const sameRows=allBudget.filter(r=>r.title===titleVal&&r.department===deptVal2&&!r.deleted);
-    const budgetRow=sameRows.find(r=>(+r.budgeted_amount||0)>0);
-    const totalBudget=budgetRow?(+budgetRow.budgeted_amount||0):0;
+    const deptVal=document.getElementById('bDept').value||'system';
+    const sameRows=allBudget.filter(r=>r.title===titleVal&&r.department===deptVal&&!r.deleted);
+    // 프로그램+세목 쌍 단위 총 예산 합산
+    const pairSet2=new Set();
+    let totalBudget=0;
+    sameRows.forEach(r=>{
+        const pairK=(r.budget_item||r.category||'');
+        if(!pairSet2.has(pairK)){pairSet2.add(pairK);totalBudget+=+r.budgeted_amount||0;}
+    });
     if(totalBudget>0){
         const sumExec=sameRows.filter(r=>r.id!==id).reduce((s,r)=>s+(+r.executed_amount||0),0);
         if(sumExec+execAmt>totalBudget){
@@ -1181,7 +1259,7 @@ async function saveBudget() {
         }
     }
     const data={
-        department:document.getElementById('bDept').value,
+        department:deptVal,
         title:titleVal,
         budget_item: budgetItemSel ? budgetItemSel.value : '',
         category: budgetItemSel ? budgetItemSel.value : '',
@@ -1205,6 +1283,100 @@ async function deleteBudget(id){
     await DB.remove('budget',id);
     await loadAll();
     showToast('삭제되었습니다');
+}
+
+// ======== 예산 일괄 업로드 (팀장용) ========
+// 엑셀 형식: A열=업무구분, B열=세부프로그램, C열=세목, D열=예산액
+async function uploadBudgetExcel(input) {
+    const file = input.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type:'array' });
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(sheet, { header:1 });
+
+            // 헤더 제외하고 파싱 (A=업무구분, B=세부프로그램, C=세목, D=예산액)
+            const parsed = [];
+            const DEPT_MAP_KOR = {
+                '비교과통합관리시스템':'system','비교과통합':'system','system':'system',
+                'RC프로그램':'rc','RC 프로그램':'rc','rc':'rc',
+                '의사소통교육':'communication','의사소통 교육':'communication','communication':'communication'
+            };
+            for(let i=1; i<rows.length; i++){
+                const row = rows[i];
+                const deptRaw = (row[0]||'').toString().trim();
+                const prog    = (row[1]||'').toString().trim();
+                const item    = (row[2]||'').toString().trim();
+                const amount  = parseFloat(row[3])||0;
+                if(!prog || !item) continue;
+                const dept = DEPT_MAP_KOR[deptRaw] || deptRaw;
+                parsed.push({ dept, prog, item, amount });
+            }
+
+            if(parsed.length === 0){
+                alert('업로드할 데이터가 없습니다.\n\n엑셀 형식을 확인해 주세요:\nA열: 업무구분, B열: 세부프로그램, C열: 세목, D열: 예산액\n(1행은 헤더로 건너뜁니다)');
+                input.value=''; return;
+            }
+
+            // 미리보기 메시지
+            const preview = parsed.slice(0,3).map(p=>`  - [${p.dept}] ${p.prog} / ${p.item}: ${p.amount.toLocaleString()}원`).join('\n');
+            const msg = `총 ${parsed.length}개 항목을 업로드합니다.\n\n미리보기 (최대 3건):\n${preview}${parsed.length>3?'\n  ...':''}\n\n기존에 같은 업무+프로그램+세목 데이터가 있으면 덮어씁니다.\n계속하시겠습니까?`;
+            if(!confirm(msg)){ input.value=''; return; }
+
+            const existing = await DB.getAll('budget');
+            let updated=0, created=0;
+
+            for(const item of parsed){
+                const budgetItemObj = typeof BUDGET_ITEMS !== 'undefined'
+                    ? BUDGET_ITEMS.find(b=>b.label===item.item||b.value===item.item)
+                    : null;
+                const budgetItemVal = budgetItemObj ? budgetItemObj.value : item.item;
+
+                const match = existing.find(r=>
+                    !r.deleted &&
+                    r.department === item.dept &&
+                    (r.title||'').trim() === item.prog &&
+                    (r.budget_item||r.category||'').trim() === budgetItemVal
+                );
+
+                const saveData = {
+                    department: item.dept,
+                    title: item.prog,
+                    budget_item: budgetItemVal,
+                    category: budgetItemVal,
+                    budgeted_amount: item.amount,
+                    executed_amount: match ? (+match.executed_amount||0) : 0,
+                    assignee_id: user.id,
+                    assignee_name: user.name,
+                    year: currentYear,
+                    month: currentPeriod || CUR_MONTH,
+                    quarter: getQuarter(currentPeriod || CUR_MONTH),
+                    description: '',
+                    execution_date: '',
+                };
+
+                if(match){
+                    await DB.update('budget', match.id, saveData);
+                    updated++;
+                } else {
+                    await DB.create('budget', saveData);
+                    created++;
+                }
+            }
+
+            input.value='';
+            await loadAll();
+            showToast(`업로드 완료! 신규 ${created}건 / 수정 ${updated}건`, 'success');
+        } catch(err){
+            console.error(err);
+            alert('엑셀 파일을 읽는 중 오류가 발생했습니다.\n파일 형식을 확인해 주세요.');
+            input.value='';
+        }
+    };
+    reader.readAsArrayBuffer(file);
 }
 
 function openEvalModal() {
