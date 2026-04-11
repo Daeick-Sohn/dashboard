@@ -265,7 +265,7 @@
         </div>
         <div id="budgetProgSummary" style="display:none;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px 14px;margin:0 0 8px;font-size:12px"></div>
         <div class="form-cols">
-            <div class="form-row"><label>예산 세목 *</label><select id="bBudgetItem" style="width:100%"></select></div>
+            <div class="form-row"><label>예산 세목 *</label><select id="bBudgetItem" style="width:100%" onchange="onBudgetProgramChange()"></select></div>
             <div class="form-row"><label>집행일</label><input type="date" id="bExecDate"></div>
         </div>
         <div class="form-cols">
@@ -778,32 +778,47 @@ function calcBudgetRate(){
     if(remEl) remEl.textContent=formatMoney(b-e);
 }
 function onBudgetProgramChange(){
-    const progName=getProgramValue('bTitle','bTitleOther');
-    const summaryEl=document.getElementById('budgetProgSummary');
-    const bBudgeted=document.getElementById('bBudgeted');
-    if(!progName||!summaryEl){if(summaryEl)summaryEl.style.display='none';return;}
-    const editingId=document.getElementById('budgetId').value;
-    const sameRows=allBudget.filter(r=>r.title===progName&&!r.deleted);
-    // 프로그램+세목 쌍당 budgeted_amount 합산 = 프로그램 총예산
-    const pairSet=new Set();
-    let totalBudget=0;
-    sameRows.forEach(r=>{
-        const pairK=(r.budget_item||r.category||'');
-        if(!pairSet.has(pairK)){pairSet.add(pairK);totalBudget+=+r.budgeted_amount||0;}
-    });
-    const sumExec=sameRows.filter(r=>r.id!==editingId).reduce((s,r)=>s+(+r.executed_amount||0),0);
-    const remain=totalBudget-sumExec;
-    if(totalBudget>0){
-        const rate=Math.round(sumExec/totalBudget*100);
-        const color=rate>=90?'#dc2626':rate>=70?'#d97706':'#059669';
-        summaryEl.style.display='block';
-        summaryEl.innerHTML=`<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:12px"><span>📌 <strong>${progName}</strong></span><span>총 예산(합계): <strong>${formatMoney(totalBudget)}</strong></span><span>누계 집행: <strong style="color:${color}">${formatMoney(sumExec)}</strong></span><span>잔액: <strong style="color:${remain<0?'#dc2626':'#059669'}">${formatMoney(remain)}</strong></span><span>집행률: <strong style="color:${color}">${rate}%</strong></span></div>`;
-        if(bBudgeted){bBudgeted.readOnly=false;bBudgeted.style.background='';bBudgeted.title='';}
+  const progName=getProgramValue('bTitle','bTitleOther');
+  const selectedItem=document.getElementById('bBudgetItem')?.value||'';
+  const summaryEl=document.getElementById('budgetProgSummary');
+  const bBudgeted=document.getElementById('bBudgeted');
+  const editingId=document.getElementById('budgetId').value;
+  if(!progName||!summaryEl){if(summaryEl)summaryEl.style.display='none';return;}
+  const sameRows=allBudget.filter(r=>r.title===progName&&!r.deleted);
+  const pairSet=new Set();
+  let totalBudget=0;
+  sameRows.forEach(r=>{
+    const pairK=(r.budget_item||r.category||'');
+    if(!pairSet.has(pairK)){pairSet.add(pairK);totalBudget+=+r.budgeted_amount||0;}
+  });
+  const sumExec=sameRows.filter(r=>r.id!==editingId).reduce((s,r)=>s+(+r.executed_amount||0),0);
+  const remain=totalBudget-sumExec;
+  // ★ 세목까지 선택된 경우 → 예산액 자동입력 (신규 추가 시에만)
+  if(progName&&selectedItem&&bBudgeted&&!editingId){
+    const matchRow=allBudget.find(r=>
+      !r.deleted&&
+      r.title===progName&&
+      (r.budget_item||r.category||'')===selectedItem
+    );
+    if(matchRow&&+matchRow.budgeted_amount>0){
+      bBudgeted.value=matchRow.budgeted_amount;
+      bBudgeted.style.background='#f0fdf4';
+      bBudgeted.title='엑셀 업로드 예산액 자동입력 (수정 가능)';
     }else{
-        summaryEl.style.display='none';
-        if(bBudgeted){bBudgeted.readOnly=false;bBudgeted.style.background='';bBudgeted.title='';}
+      bBudgeted.value='';
+      bBudgeted.style.background='';
+      bBudgeted.title='';
     }
-    calcBudgetRate();
+  }
+  if(totalBudget>0){
+    const rate=Math.round(sumExec/totalBudget*100);
+    const color=rate>=90?'#dc2626':rate>=70?'#d97706':'#059669';
+    summaryEl.style.display='block';
+    summaryEl.innerHTML=`<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:12px"><span>📌 <strong>${progName}</strong></span><span>총 예산(합계): <strong>${formatMoney(totalBudget)}</strong></span><span>누계 집행: <strong style="color:${color}">${formatMoney(sumExec)}</strong></span><span>잔액: <strong style="color:${remain<0?'#dc2626':'#059669'}">${formatMoney(remain)}</strong></span><span>집행률: <strong style="color:${color}">${rate}%</strong></span></div>`;
+  }else{
+    summaryEl.style.display='none';
+  }
+  calcBudgetRate();
 }
 function openBudgetModal(){
     document.getElementById('budgetId').value='';['bDesc'].forEach(id=>document.getElementById(id).value='');
