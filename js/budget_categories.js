@@ -15,6 +15,7 @@ const BUDGET_ITEMS = [
     { value: '일용직부담금',       label: '일용직부담금' },
     { value: '장학금',             label: '장학금' },
     { value: '포상금',             label: '포상금' },
+    { value: '인건비및부담금',     label: '인건비및부담금' },
 ];
 
 // <select> 옵션 HTML 생성 헬퍼
@@ -37,6 +38,7 @@ const BUDGET_ITEM_COLORS = {
     '일용직부담금':       { color: '#ea580c', bg: '#fff7ed' },
     '장학금':             { color: '#0f766e', bg: '#f0fdfa' },
     '포상금':             { color: '#be185d', bg: '#fdf2f8' },
+    '인건비및부담금':     { color: '#dc2626', bg: '#fef2f2' },
 };
 
 function budgetItemBadge(itemName) {
@@ -148,7 +150,7 @@ const DEPT_PROGRAMS = {
     ],
     rc: [
         'RC-Bridge',
-        'RC-Markers',
+        'RC-Makers',
         'RC-10minutes',
         'RC-특강',
         'RC-인사이트',
