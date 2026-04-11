@@ -915,7 +915,8 @@ function renderBudgetItemTable(budget) {
     if(!tbody || typeof BUDGET_ITEMS === 'undefined') return;
 
     // 프로그램+세목 쌍 단위 예산액 맵
-    const pairBudgetMap = buildPairBudgetMap(allBudget);
+    const deptBudget = currentDept==='all' ? allBudget : allBudget.filter(r=>r.department===currentDept);
+    const pairBudgetMap = buildPairBudgetMap(deptBudget);
 
     const grouped = {};
     BUDGET_ITEMS.forEach(item => { grouped[item.value] = { b:0, e:0 }; });
@@ -1310,10 +1311,11 @@ async function uploadBudgetExcel(input) {
                 const deptRaw = (row[0]||'').toString().trim();
                 const prog    = (row[1]||'').toString().trim();
                 const item    = (row[2]||'').toString().trim();
-                const amount  = parseFloat(row[3])||0;
-                if(!prog || !item) continue;
+                const amount     = parseFloat(row[3])||0;
+                const assigneeId = (row[4] || '').toString().trim();
+                if (!prog || !item) continue;
                 const dept = DEPT_MAP_KOR[deptRaw] || deptRaw;
-                parsed.push({ dept, prog, item, amount });
+                parsed.push({ dept, prog, item, amount, assigneeId });
             }
 
             if(parsed.length === 0){
@@ -1349,8 +1351,8 @@ async function uploadBudgetExcel(input) {
                     category: budgetItemVal,
                     budgeted_amount: item.amount,
                     executed_amount: match ? (+match.executed_amount||0) : 0,
-                    assignee_id: user.id,
-                    assignee_name: user.name,
+                    assignee_id: item.assigneeId || user.id,
+                    assignee_name: item.assigneeId ? (MEMBERS.find(m=>m.id===item.assigneeId)?.name || user.name) : user.name,
                     year: currentYear,
                     month: currentPeriod || CUR_MONTH,
                     quarter: getQuarter(currentPeriod || CUR_MONTH),
