@@ -290,7 +290,7 @@
         <div id="budgetProgSummary" style="display:none;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px 14px;margin:0 0 8px;font-size:12px"></div>
         <div class="form-cols">
             <div class="form-row"><label>예산 세목 *</label>
-                <select id="bBudgetItem" style="width:100%"></select>
+                <select id="bBudgetItem" style="width:100%" onchange="onBudgetProgramChange()"></select>
             </div>
             <div class="form-row"><label>집행일</label><input type="date" id="bExecDate"></div>
         </div>
@@ -888,7 +888,7 @@ function syncBudgetFromProgram(){ calcBudgetRate(); }
 function onBudgetProgramChange(){
     const progName = getProgramValue('bTitle','bTitleOther');
     const summaryEl = document.getElementById('budgetProgSummary');
-    const bBudgeted = document.getElementById('bBudgeted');
+    const selectedItem=document.getElementById('bBudgetItem')?.value||'';
     if(!progName || !summaryEl){ if(summaryEl) summaryEl.style.display='none'; return; }
     const editingId = document.getElementById('budgetId').value;
     const sameRows = allBudget.filter(r => r.title === progName && !r.deleted);
@@ -916,15 +916,27 @@ function onBudgetProgramChange(){
                 <span>잔액: <strong style="color:${remain<0?'#dc2626':'#059669'}">${formatMoney(remain)}</strong></span>
                 <span>집행률: <strong style="color:${color}">${rate}%</strong></span>
             </div>`;
-        if(bBudgeted){
-            bBudgeted.value = totalBudget;
-            bBudgeted.readOnly = true;
-            bBudgeted.style.background='#f3f4f6';
-            bBudgeted.title='예산액은 이 프로그램의 등록된 예산입니다. 변경하려면 예산 수정을 이용하세요';
-        }
+          // ★ 세목까지 선택된 경우 → 예산액 자동입력 (신규 추가 시에만)
+  if(progName&&selectedItem&&bBudgeted&&!editingId){
+    const matchRow=allBudget.find(r=>
+      !r.deleted&&
+      r.title===progName&&
+      (r.budget_item||r.category||'')===selectedItem
+    );
+    if(matchRow&&+matchRow.budgeted_amount>0){
+      bBudgeted.value=matchRow.budgeted_amount;
+      bBudgeted.readOnly=false;
+      bBudgeted.style.background='#f0fdf4';
+      bBudgeted.title='엑셀 업로드 예산액 자동입력 (수정 가능)';
+    }else{
+      bBudgeted.value='';
+      bBudgeted.readOnly=false;
+      bBudgeted.style.background='';
+      bBudgeted.title='';
+    }
+  }
     } else {
-        summaryEl.style.display='none';
-        if(bBudgeted){ bBudgeted.readOnly=false; bBudgeted.style.background=''; bBudgeted.title=''; }
+        summaryEl.style.display='none';    
     }
     calcBudgetRate();
 }
