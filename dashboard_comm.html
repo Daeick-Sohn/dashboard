@@ -897,8 +897,11 @@ function openMyPlanModal(){
   document.getElementById('mpBudgeted').value='';
   document.getElementById('mpYear').value=CUR_YEAR;
   document.getElementById('mpMonth').value=CUR_MONTH;
-  // 프로그램 목록 직접 채우기
-  populateMpProgramSelect('');
+  // bTitle과 동일한 방식으로 mpTitle 채우기
+  if(typeof populateProgramSelect!=='undefined') populateProgramSelect(DEPT,'');
+  const bTitleSel=document.getElementById('bTitle');
+  const mpTitleSel=document.getElementById('mpTitle');
+  if(bTitleSel&&mpTitleSel) mpTitleSel.innerHTML=bTitleSel.innerHTML;
   const sel=document.getElementById('mpBudgetItem');
   if(sel&&typeof BUDGET_ITEMS!=='undefined'){sel.innerHTML='<option value="">세목 선택</option>';BUDGET_ITEMS.forEach(item=>sel.innerHTML+=`<option value="${item.value}">${item.label}</option>`);}
   document.getElementById('mpTitleOther').style.display='none';
