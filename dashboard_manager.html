@@ -877,14 +877,41 @@ function renderTaskChart(data) {
 }
 
 function renderBudgetChart() {
-  const depts = ['system','rc','communication'];
-  const labels = ['비교과통합시스템','RC 프로그램','의사소통 교육'];
   const execMap = buildExecMap();
-  const budgeted = depts.map(d => allPlans.filter(p=>p.department===d).reduce((s,p)=>s+(+p.budgeted_amount||0),0));
-  const executed = depts.map(d => allPlans.filter(p=>p.department===d).reduce((s,p)=>s+(execMap[p.id]||0),0));
+  let labels, budgeted, executed;
+
+  if(currentDept === 'all') {
+    // 전체 탭: 3개 부서 비교
+    const depts = ['system','rc','communication'];
+    labels = ['비교과통합시스템','RC 프로그램','의사소통 교육'];
+    budgeted = depts.map(d => allPlans.filter(p=>p.department===d).reduce((s,p)=>s+(+p.budgeted_amount||0),0));
+    executed = depts.map(d => allPlans.filter(p=>p.department===d).reduce((s,p)=>s+(execMap[p.id]||0),0));
+  } else {
+    // 특정 부서 탭: 해당 부서의 세부 프로그램별 비교
+    const deptPlans = allPlans.filter(p => p.department === currentDept);
+    labels = deptPlans.map(p => p.title.length > 10 ? p.title.substring(0,10)+'…' : p.title);
+    budgeted = deptPlans.map(p => +p.budgeted_amount||0);
+    executed = deptPlans.map(p => execMap[p.id]||0);
+    if(!labels.length) { labels=['데이터 없음']; budgeted=[0]; executed=[0]; }
+  }
+
   const ctx = document.getElementById('budgetChart').getContext('2d');
   if(budgetChart) budgetChart.destroy();
-  budgetChart = new Chart(ctx, { type:'bar', data:{labels,datasets:[{label:'예산액',data:budgeted,backgroundColor:'rgba(99,102,241,0.2)',borderColor:'#6366f1',borderWidth:2},{label:'집행액',data:executed,backgroundColor:'rgba(16,185,129,0.7)',borderColor:'#059669',borderWidth:2}]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:12}}}},scales:{y:{beginAtZero:true,ticks:{callback:v=>v.toLocaleString()+'원'}}}} });
+  budgetChart = new Chart(ctx, {
+    type:'bar',
+    data:{
+      labels,
+      datasets:[
+        {label:'예산액',data:budgeted,backgroundColor:'rgba(99,102,241,0.2)',borderColor:'#6366f1',borderWidth:2},
+        {label:'집행액',data:executed,backgroundColor:'rgba(16,185,129,0.7)',borderColor:'#059669',borderWidth:2}
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom',labels:{font:{size:12}}}},
+      scales:{y:{beginAtZero:true,ticks:{callback:v=>v.toLocaleString()+'원'}}}
+    }
+  });
 }
 
 // ── 업무 과제 ──
