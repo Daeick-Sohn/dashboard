@@ -699,17 +699,26 @@ function renderBudget(){
   allBudget.forEach(r=>{ const k=r.title||''; if(!progGroups[k])progGroups[k]=[]; progGroups[k].push(r); });
   Object.entries(progGroups).forEach(([prog,rows])=>{
     rows.sort((a,b)=>{ const da=a.execution_date||a.created_at||''; const db=b.execution_date||b.created_at||''; return da<db?-1:da>db?1:0; });
-    const plan=allPlans.find(p=>p.title===prog);
-    const totalB=plan?+plan.budgeted_amount||0:0;
     let cum=0;
-    rows.forEach(r=>{ cum+=(+r.executed_amount||0); progRunningMap.set(r.id,{cumExec:cum,remain:totalB-cum,rate:totalB>0?Math.min(Math.round(cum/totalB*100),999):0}); });
+    rows.forEach(r=>{
+      const rItem=r.budget_item||r.category||'';
+      const rPlan=r.plan_id
+        ? allPlans.find(p=>p.id===r.plan_id)
+        : allPlans.find(p=>p.title===prog && p.budget_item===rItem);
+      const totalB=rPlan?+rPlan.budgeted_amount||0:0;
+      cum+=(+r.executed_amount||0);
+      progRunningMap.set(r.id,{cumExec:cum,remain:totalB-cum,rate:totalB>0?Math.min(Math.round(cum/totalB*100),999):0});
+    });
   });
 
   const tbody=document.getElementById('budgetTableBody');
   if(!budget.length){tbody.innerHTML=`<tr><td colspan="10"><div class="empty-state"><i class="fas fa-inbox"></i><p>집행 내역이 없습니다</p></div></td></tr>`;return;}
   budget.sort((a,b)=>{ const ta=a.title||'',tb=b.title||''; if(ta<tb)return -1;if(ta>tb)return 1; const da=a.execution_date||a.created_at||''; const db=b.execution_date||b.created_at||''; return da<db?-1:da>db?1:0; });
   tbody.innerHTML=budget.map(b=>{
-    const plan=allPlans.find(p=>p.title===b.title);
+    const bItem=b.budget_item||b.category||'';
+    const plan=b.plan_id
+      ? allPlans.find(p=>p.id===b.plan_id)
+      : allPlans.find(p=>p.title===b.title && p.budget_item===bItem);
     const planBudg=plan?+plan.budgeted_amount||0:+b.budgeted_amount||0;
     const running=progRunningMap.get(b.id)||{cumExec:0,remain:planBudg,rate:0};
     const r=running.rate; const color=r>=90?'#dc2626':r>=70?'#d97706':'#059669';
