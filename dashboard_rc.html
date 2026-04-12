@@ -878,17 +878,35 @@ function openMyPlanModal(){
   document.getElementById('mpBudgeted').value='';
   document.getElementById('mpYear').value=CUR_YEAR;
   document.getElementById('mpMonth').value=CUR_MONTH;
-  if(typeof populateProgramSelect!=='undefined') populateProgramSelect(DEPT,'');
+  // 프로그램 목록 직접 채우기
+  populateMpProgramSelect('');
   const sel=document.getElementById('mpBudgetItem');
   if(sel&&typeof BUDGET_ITEMS!=='undefined'){sel.innerHTML='<option value="">세목 선택</option>';BUDGET_ITEMS.forEach(item=>sel.innerHTML+=`<option value="${item.value}">${item.label}</option>`);}
+  document.getElementById('mpTitleOther').style.display='none';
   document.getElementById('myPlanModal').classList.add('show');
+}
+function populateMpProgramSelect(selected) {
+  const sel = document.getElementById('mpTitle');
+  if(!sel) return;
+  // programs 테이블 + 기존 budget_plan 제목 합산
+  const fromPrograms = allPrograms.map(p => p.name||'').filter(Boolean);
+  const fromPlans = allPlans.map(p => p.title||'').filter(Boolean);
+  const combined = [...new Set([...fromPrograms, ...fromPlans])].sort();
+  let opts = '<option value="">프로그램 선택 *</option>';
+  combined.forEach(name => {
+    opts += `<option value="${name}" ${name===selected?'selected':''}>${name}</option>`;
+  });
+  opts += '<option value="__other__">직접 입력...</option>';
+  sel.innerHTML = opts;
+  if(selected) sel.value = selected;
 }
 function editMyPlan(id){
   const p=allPlans.find(x=>x.id===id); if(!p)return;
   if(p.status==='approved'){alert('승인된 계획은 수정할 수 없습니다.');return;}
   document.getElementById('mpId').value=p.id;
   document.getElementById('myPlanModalTitle').textContent='예산 계획 수정';
-  if(typeof populateProgramSelect!=='undefined') populateProgramSelect(DEPT,p.title||'');
+  populateMpProgramSelect(p.title||'');
+  document.getElementById('mpTitleOther').style.display='none';
   const sel=document.getElementById('mpBudgetItem');
   if(sel&&typeof BUDGET_ITEMS!=='undefined'){sel.innerHTML='<option value="">세목 선택</option>';BUDGET_ITEMS.forEach(item=>sel.innerHTML+=`<option value="${item.value}" ${p.budget_item===item.value?'selected':''}>${item.label}</option>`);}
   document.getElementById('mpBudgeted').value=p.budgeted_amount||'';
@@ -946,6 +964,22 @@ function openNoticeModal(){document.getElementById('noticeId').value='';['nTitle
 async function saveNotice(){const id=document.getElementById('noticeId').value;const nDate=document.getElementById('nDate').value;const mo=nDate?getMonth(nDate):CUR_MONTH;const data={department:DEPT,title:document.getElementById('nTitle').value.trim(),content:document.getElementById('nContent').value,severity:document.getElementById('nSeverity').value,date:nDate,author_id:user.id,author_name:user.name,is_confirmed:false,year:CUR_YEAR,month:mo};if(!data.title){alert('제목을 입력하세요');return;}if(id)await DB.update('notices',id,data);else await DB.create('notices',data);closeModal('noticeModal');await loadAll();showToast('특이사항이 등록되었습니다. 팀장 확인을 기다립니다.','success');}
 async function deleteNotice(id){if(!confirm('삭제하시겠습니까?'))return;await DB.remove('notices',id);await loadAll();showToast('삭제되었습니다');}
 
+function onProgramSelectChange(selId, otherId) {
+  const sel = document.getElementById(selId);
+  const other = document.getElementById(otherId);
+  if(!sel || !other) return;
+  if(sel.value === '__other__') {
+    other.style.display = 'block'; other.focus();
+  } else {
+    other.style.display = 'none'; other.value = '';
+  }
+}
+function getProgramValue(selId, otherId) {
+  const sel = document.getElementById(selId);
+  const other = document.getElementById(otherId);
+  if(!sel) return '';
+  return sel.value === '__other__' ? (other?other.value.trim():'') : sel.value;
+}
 function closeModal(id){document.getElementById(id).classList.remove('show');}
 function showToast(msg,type=''){const el=document.getElementById('toast');document.getElementById('toastMsg').textContent=msg;el.className='toast show'+(type?' '+type:'');setTimeout(()=>el.classList.remove('show'),2500);}
 function copyMyLink(){const token=(user&&user.token)?user.token:'';if(!token){showToast('링크 정보를 찾을 수 없습니다','error');return;}const base=location.origin+location.pathname.replace('dashboard_rc.html','');const url=`${base}dashboard_rc.html?key=${token}`;navigator.clipboard.writeText(url).then(()=>showToast('내 접근 링크가 복사되었습니다','success'));}
