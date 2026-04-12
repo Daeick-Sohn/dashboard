@@ -984,7 +984,21 @@ function renderTasks() {
       <td><button class="btn btn-outline btn-sm" onclick="editTask('${t.id}')"><i class="fas fa-edit"></i></button><button class="btn btn-danger btn-sm" onclick="deleteTask('${t.id}')"><i class="fas fa-trash"></i></button></td>
     </tr>`).join('') : `<tr><td colspan="8"><div class="empty-state"><i class="fas fa-inbox"></i><p>등록된 과제가 없습니다</p></div></td></tr>`;
 }
-
+  
+function populatePlanProgramSelect(dept, selected) {
+  const sel = document.getElementById('pnTitle');
+  if(!sel) return;
+  const names = [...new Set(
+    allPrograms.filter(p=>p.department===dept||!p.department).map(p=>p.name||'')
+    .concat(allPlans.filter(p=>p.department===dept).map(p=>p.title||''))
+    .filter(Boolean)
+  )].sort();
+  let opts = '<option value="">세부 프로그램 선택 *</option>';
+  names.forEach(n => opts += `<option value="${n}" ${n===selected?'selected':''}>${n}</option>`);
+  opts += '<option value="__other__">직접 입력...</option>';
+  sel.innerHTML = opts;
+  if(selected) sel.value = selected;
+}
 // ── 예산 계획 승인/반려 ──
 async function approvePlan(id) {
   if(!confirm('이 예산 계획을 승인하시겠습니까?')) return;
@@ -1149,7 +1163,7 @@ function openPlanModal() {
   document.getElementById('pnYear').value=CUR_YEAR;
   document.getElementById('planModalTitle').textContent='예산 계획 추가';
   const d = document.getElementById('pnDept').value || 'system';
-  if(typeof populateProgramSelect !== 'undefined') populateProgramSelect(d, '');
+  populatePlanProgramSelect(d, '');
   document.getElementById('planModal').classList.add('show');
 }
 function editPlan(id) {
@@ -1157,7 +1171,7 @@ function editPlan(id) {
   document.getElementById('planId').value=p.id;
   document.getElementById('planModalTitle').textContent='예산 계획 수정';
   document.getElementById('pnDept').value=p.department||'system';
-  if(typeof populateProgramSelect!=='undefined') populateProgramSelect(p.department||'system', p.title||'');
+  populatePlanProgramSelect(p.department||'system', p.title||'');
   document.getElementById('pnAssignee').value=p.assignee_id||'';
   document.getElementById('pnBudgetItem').value=p.budget_item||'';
   document.getElementById('pnBudgeted').value=p.budgeted_amount||'';
