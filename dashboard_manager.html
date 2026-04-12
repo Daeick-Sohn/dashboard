@@ -1032,10 +1032,16 @@ function renderBudget() {
   allBudget.filter(r=>!r.deleted).forEach(r => { const k=r.title||''; if(!progGroups[k])progGroups[k]=[]; progGroups[k].push(r); });
   Object.entries(progGroups).forEach(([prog,rows]) => {
     rows.sort((a,b)=>{ const da=a.execution_date||a.created_at||''; const db=b.execution_date||b.created_at||''; return da<db?-1:da>db?1:0; });
-    const plan = allPlans.find(p=>p.title===prog);
-    const totalB = plan ? +plan.budgeted_amount||0 : 0;
     let cumExec=0;
-    rows.forEach(r=>{ cumExec+=(+r.executed_amount||0); progRunningMap.set(r.id,{cumExec,remain:totalB-cumExec,rate:totalB>0?Math.min(Math.round(cumExec/totalB*100),999):0}); });
+    rows.forEach(r=>{
+      const rItem=r.budget_item||r.category||'';
+      const rPlan=r.plan_id
+        ? allPlans.find(p=>p.id===r.plan_id)
+        : allPlans.find(p=>p.title===prog && p.budget_item===rItem && p.department===r.department);
+      const totalB=rPlan?+rPlan.budgeted_amount||0:0;
+      cumExec+=(+r.executed_amount||0);
+      progRunningMap.set(r.id,{cumExec,remain:totalB-cumExec,rate:totalB>0?Math.min(Math.round(cumExec/totalB*100),999):0});
+    });
   });
 
   const tbody = document.getElementById('budgetTableBody');
