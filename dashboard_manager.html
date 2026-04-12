@@ -1156,6 +1156,19 @@ function onPlanDeptChange() {
   sel.querySelectorAll('option').forEach(o => { if(!o.value) return; o.style.display = (!o.dataset.dept || o.dataset.dept===d) ? '' : 'none'; });
   if(typeof populateProgramSelect !== 'undefined') populateProgramSelect(d, '');
 }
+function populatePlanTitleSelect(dept, selected) {
+  const sel = document.getElementById('pnTitle');
+  if(!sel) return;
+  const names = [...new Set([
+    ...allPrograms.filter(p=>p.department===dept).map(p=>p.name||''),
+    ...allPlans.filter(p=>p.department===dept).map(p=>p.title||'')
+  ].filter(Boolean))].sort();
+  let opts = '<option value="">세부 프로그램 선택 *</option>';
+  names.forEach(n => opts += `<option value="${n}" ${n===selected?'selected':''}>${n}</option>`);
+  opts += '<option value="__other__">직접 입력...</option>';
+  sel.innerHTML = opts;
+  if(selected) sel.value = selected;
+}
 function openPlanModal() {
   document.getElementById('planId').value='';
   ['pnBudgeted','pnNote'].forEach(id=>document.getElementById(id).value='');
@@ -1276,7 +1289,7 @@ function onPlanSelChange() {
   // 자동 채움
   document.getElementById('bDept').value = plan.department||'system';
   onBudgetDeptChange();
-  if(typeof populateProgramSelect!=='undefined') populateProgramSelect(plan.department, plan.title);
+  populatePlanTitleSelect(p.department||'system', p.title||'');
   document.getElementById('bBudgeted').value = plan.budgeted_amount||0;
   if(document.getElementById('bBudgetItem')) document.getElementById('bBudgetItem').value = plan.budget_item||'';
   if(plan.assignee_id) document.getElementById('bAssignee').value = plan.assignee_id;
