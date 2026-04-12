@@ -47,6 +47,11 @@ cursor:pointer; border:2px solid; transition:all 0.2s; background:white; font-fa
 .plan-card .pc-row strong { color:#1f2937; }
 .plan-card .pc-bar { margin-top:10px; }
 .plan-card .pc-assignee { font-size:12px; color:#9ca3af; margin-top:8px; border-top:1px solid #f3f4f6; padding-top:8px; }
+.plan-status { display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700; }
+.plan-status.draft     { background:#f1f5f9;color:#64748b; }
+.plan-status.submitted { background:#eff6ff;color:#2563eb; }
+.plan-status.approved  { background:#ecfdf5;color:#059669; }
+.plan-status.rejected  { background:#fef2f2;color:#dc2626; }
 
 @media(max-width:900px){ .grid-2,.grid-3{ grid-template-columns:1fr; } }
 @media(max-width:768px){ .dept-tab{ padding:6px 12px; font-size:12px; } }
@@ -230,6 +235,13 @@ cursor:pointer; border:2px solid; transition:all 0.2s; background:white; font-fa
           <option value="res02">이진우</option>
           <option value="res03">김진국</option>
           <option value="res04">손대익</option>
+        </select>
+        <select id="planStatusFilter" onchange="renderPlanCards()" style="padding:6px 10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:12px;font-family:'Noto Sans KR',sans-serif">
+          <option value="">전체 상태</option>
+          <option value="submitted">제출됨 (승인 대기)</option>
+          <option value="approved">승인됨</option>
+          <option value="rejected">반려됨</option>
+          <option value="draft">임시저장</option>
         </select>
         <select id="planItemFilter" onchange="renderPlanCards()">
           <option value="">전체 세목</option>
@@ -520,6 +532,22 @@ cursor:pointer; border:2px solid; transition:all 0.2s; background:white; font-fa
 </div>
 </div>
 
+<!-- 반려 사유 모달 -->
+<div class="modal-overlay" id="rejectModal">
+<div class="modal" style="max-width:420px">
+  <h3 style="color:#dc2626"><i class="fas fa-times-circle"></i> 예산 계획 반려</h3>
+  <input type="hidden" id="rejectPlanId">
+  <div class="form-row">
+    <label>반려 사유 *</label>
+    <textarea id="rejectComment" rows="4" placeholder="반려 사유를 입력하세요. 담당자 페이지에 표시됩니다."></textarea>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-outline" onclick="closeModal('rejectModal')">취소</button>
+    <button class="btn btn-sm" style="background:#dc2626;color:white;padding:8px 18px" onclick="rejectPlan()">반려 처리</button>
+  </div>
+</div>
+</div>
+
 <div class="toast" id="toast"><i class="fas fa-check-circle"></i><span id="toastMsg"></span></div>
 
 <script src="js/config.js"></script>
@@ -673,6 +701,11 @@ function renderBudgetSection() {
 }
 
 // ── 예산 계획 카드 렌더링 ──
+function planStatusBadge(status) {
+  const map = { draft:'임시저장', submitted:'제출됨', approved:'승인됨', rejected:'반려됨' };
+  return `<span class="plan-status ${status||'approved'}">${map[status]||'승인됨'}</span>`;
+}
+
 function renderPlanCards() {
   let plans = allPlans.filter(p => {
     if(currentDept !== 'all' && p.department !== currentDept) return false;
@@ -682,15 +715,15 @@ function renderPlanCards() {
     if(af && p.assignee_id !== af) return false;
     const itemF = document.getElementById('planItemFilter')?.value;
     if(itemF && p.budget_item !== itemF) return false;
+    const stF = document.getElementById('planStatusFilter')?.value;
+    if(stF && (p.status||'approved') !== stF) return false;
     return true;
   });
 
-  // 각 계획의 누계 집행액 계산
   const execMap = {};
   allBudget.forEach(b => {
     if(b.plan_id) execMap[b.plan_id] = (execMap[b.plan_id]||0) + (+b.executed_amount||0);
     else {
-      // plan_id 없는 집행 내역 → title+budget_item 매칭으로 연결
       const matchPlan = allPlans.find(p => p.title === b.title && p.budget_item === (b.budget_item||b.category));
       if(matchPlan) execMap[matchPlan.id] = (execMap[matchPlan.id]||0) + (+b.executed_amount||0);
     }
@@ -701,9 +734,19 @@ function renderPlanCards() {
 
   const grid = document.getElementById('planCardGrid');
   if(!plans.length) {
-    grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><i class="fas fa-clipboard-list"></i><p>등록된 예산 계획이 없습니다. 엑셀 업로드 또는 계획 추가를 해주세요.</p></div>';
+    grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><i class="fas fa-clipboard-list"></i><p>등록된 예산 계획이 없습니다.</p></div>';
     document.getElementById('planSummary').innerHTML = '';
     return;
+  }
+
+  // 제출 대기 건수 배지
+  const submittedCount = allPlans.filter(p=>(p.status||'approved')==='submitted').length;
+  if(submittedCount>0) {
+    const existBadge = document.getElementById('submitBadge');
+    if(!existBadge) {
+      const tabEl = document.getElementById('bstab-plan');
+      if(tabEl) tabEl.innerHTML += ` <span id="submitBadge" style="background:#dc2626;color:white;border-radius:10px;padding:1px 7px;font-size:11px">${submittedCount}</span>`;
+    } else { existBadge.textContent = submittedCount; }
   }
 
   grid.innerHTML = plans.map(p => {
@@ -715,10 +758,15 @@ function renderPlanCards() {
     const rateColor = rate>=90?'#dc2626':rate>=70?'#d97706':'#059669';
     const itemLabel = (typeof BUDGET_ITEMS !== 'undefined') ?
       (BUDGET_ITEMS.find(i=>i.value===p.budget_item)?.label || p.budget_item) : p.budget_item;
-    return `<div class="plan-card" style="border-left-color:${col}">
+    const st = p.status||'approved';
+    const isSubmitted = st==='submitted';
+    return `<div class="plan-card" style="border-left-color:${col}${isSubmitted?';box-shadow:0 0 0 2px #2563eb33':''}">
       <div class="pc-header">
         <span class="pc-prog">${p.title}</span>
-        <span class="pc-dept" style="background:${col}18;color:${col}">${deptLabel[p.department]||''}</span>
+        <div style="display:flex;gap:4px;align-items:center">
+          ${planStatusBadge(st)}
+          <span class="pc-dept" style="background:${col}18;color:${col}">${deptLabel[p.department]||''}</span>
+        </div>
       </div>
       <div class="pc-row"><span>세목</span><strong>${itemLabel||'-'}</strong></div>
       <div class="pc-row"><span>예산액</span><strong>${formatMoney(budg)}</strong></div>
@@ -732,7 +780,11 @@ function renderPlanCards() {
       </div>
       <div class="pc-assignee">
         <i class="fas fa-user" style="font-size:10px"></i> ${p.assignee_name||'미지정'}
-        <span style="float:right">
+        <span style="float:right;display:flex;gap:4px">
+          ${isSubmitted?`
+            <button class="btn btn-sm" style="background:#059669;color:white;font-size:11px" onclick="approvePlan('${p.id}')"><i class="fas fa-check"></i> 승인</button>
+            <button class="btn btn-sm" style="background:#dc2626;color:white;font-size:11px" onclick="openRejectModal('${p.id}')"><i class="fas fa-times"></i> 반려</button>
+          `:''}
           <button class="btn btn-outline btn-sm" onclick="editPlan('${p.id}')"><i class="fas fa-edit"></i></button>
           <button class="btn btn-danger btn-sm" onclick="deletePlan('${p.id}')"><i class="fas fa-trash"></i></button>
         </span>
@@ -740,18 +792,21 @@ function renderPlanCards() {
     </div>`;
   }).join('');
 
-  // 합계
-  const totalB = plans.reduce((s,p)=>s+(+p.budgeted_amount||0), 0);
-  const totalE = plans.reduce((s,p)=>s+(execMap[p.id]||0), 0);
+  const approvedPlans = plans.filter(p=>(p.status||'approved')==='approved');
+  const totalB = approvedPlans.reduce((s,p)=>s+(+p.budgeted_amount||0), 0);
+  const totalE = approvedPlans.reduce((s,p)=>s+(execMap[p.id]||0), 0);
   const totalR = pct(totalE, totalB);
   const tc = totalR>=90?'#dc2626':totalR>=70?'#d97706':'#059669';
+  const sub = plans.filter(p=>p.status==='submitted').length;
+  const rej = plans.filter(p=>p.status==='rejected').length;
   document.getElementById('planSummary').innerHTML = `
-    <div style="display:flex;gap:24px;flex-wrap:wrap;padding:12px 4px;font-size:13px">
-      <span>총 계획 <strong>${plans.length}건</strong></span>
-      <span>총 예산액 <strong>${formatMoney(totalB)}</strong></span>
-      <span>총 집행액 <strong style="color:${tc}">${formatMoney(totalE)}</strong></span>
-      <span>총 잔액 <strong style="color:${totalB-totalE<0?'#dc2626':'#059669'}">${formatMoney(totalB-totalE)}</strong></span>
-      <span>전체 집행률 <strong style="color:${tc}">${totalR}%</strong></span>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;padding:12px 4px;font-size:13px;align-items:center">
+      <span>전체 <strong>${plans.length}건</strong></span>
+      ${sub?`<span style="color:#2563eb;font-weight:600">⏳ 승인 대기 ${sub}건</span>`:''}
+      ${rej?`<span style="color:#dc2626;font-weight:600">❌ 반려 ${rej}건</span>`:''}
+      <span>승인 예산액 <strong>${formatMoney(totalB)}</strong></span>
+      <span>집행액 <strong style="color:${tc}">${formatMoney(totalE)}</strong></span>
+      <span>집행률 <strong style="color:${tc}">${totalR}%</strong></span>
     </div>`;
 }
 
@@ -877,41 +932,14 @@ function renderTaskChart(data) {
 }
 
 function renderBudgetChart() {
+  const depts = ['system','rc','communication'];
+  const labels = ['비교과통합시스템','RC 프로그램','의사소통 교육'];
   const execMap = buildExecMap();
-  let labels, budgeted, executed;
-
-  if(currentDept === 'all') {
-    // 전체 탭: 3개 부서 비교
-    const depts = ['system','rc','communication'];
-    labels = ['비교과통합시스템','RC 프로그램','의사소통 교육'];
-    budgeted = depts.map(d => allPlans.filter(p=>p.department===d).reduce((s,p)=>s+(+p.budgeted_amount||0),0));
-    executed = depts.map(d => allPlans.filter(p=>p.department===d).reduce((s,p)=>s+(execMap[p.id]||0),0));
-  } else {
-    // 특정 부서 탭: 해당 부서의 세부 프로그램별 비교
-    const deptPlans = allPlans.filter(p => p.department === currentDept);
-    labels = deptPlans.map(p => p.title.length > 10 ? p.title.substring(0,10)+'…' : p.title);
-    budgeted = deptPlans.map(p => +p.budgeted_amount||0);
-    executed = deptPlans.map(p => execMap[p.id]||0);
-    if(!labels.length) { labels=['데이터 없음']; budgeted=[0]; executed=[0]; }
-  }
-
+  const budgeted = depts.map(d => allPlans.filter(p=>p.department===d).reduce((s,p)=>s+(+p.budgeted_amount||0),0));
+  const executed = depts.map(d => allPlans.filter(p=>p.department===d).reduce((s,p)=>s+(execMap[p.id]||0),0));
   const ctx = document.getElementById('budgetChart').getContext('2d');
   if(budgetChart) budgetChart.destroy();
-  budgetChart = new Chart(ctx, {
-    type:'bar',
-    data:{
-      labels,
-      datasets:[
-        {label:'예산액',data:budgeted,backgroundColor:'rgba(99,102,241,0.2)',borderColor:'#6366f1',borderWidth:2},
-        {label:'집행액',data:executed,backgroundColor:'rgba(16,185,129,0.7)',borderColor:'#059669',borderWidth:2}
-      ]
-    },
-    options:{
-      responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{position:'bottom',labels:{font:{size:12}}}},
-      scales:{y:{beginAtZero:true,ticks:{callback:v=>v.toLocaleString()+'원'}}}
-    }
-  });
+  budgetChart = new Chart(ctx, { type:'bar', data:{labels,datasets:[{label:'예산액',data:budgeted,backgroundColor:'rgba(99,102,241,0.2)',borderColor:'#6366f1',borderWidth:2},{label:'집행액',data:executed,backgroundColor:'rgba(16,185,129,0.7)',borderColor:'#059669',borderWidth:2}]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:12}}}},scales:{y:{beginAtZero:true,ticks:{callback:v=>v.toLocaleString()+'원'}}}} });
 }
 
 // ── 업무 과제 ──
@@ -933,6 +961,28 @@ function renderTasks() {
       <td style="font-size:11px;color:#6b7280;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.note||''}</td>
       <td><button class="btn btn-outline btn-sm" onclick="editTask('${t.id}')"><i class="fas fa-edit"></i></button><button class="btn btn-danger btn-sm" onclick="deleteTask('${t.id}')"><i class="fas fa-trash"></i></button></td>
     </tr>`).join('') : `<tr><td colspan="8"><div class="empty-state"><i class="fas fa-inbox"></i><p>등록된 과제가 없습니다</p></div></td></tr>`;
+}
+
+// ── 예산 계획 승인/반려 ──
+async function approvePlan(id) {
+  if(!confirm('이 예산 계획을 승인하시겠습니까?')) return;
+  await DB.update('budget_plan', id, { status:'approved', approved_at: new Date().toISOString(), manager_comment:'' });
+  await loadAll();
+  showToast('승인되었습니다.', 'success');
+}
+function openRejectModal(id) {
+  document.getElementById('rejectPlanId').value = id;
+  document.getElementById('rejectComment').value = '';
+  document.getElementById('rejectModal').classList.add('show');
+}
+async function rejectPlan() {
+  const id = document.getElementById('rejectPlanId').value;
+  const comment = document.getElementById('rejectComment').value.trim();
+  if(!comment) { alert('반려 사유를 입력하세요.'); return; }
+  await DB.update('budget_plan', id, { status:'rejected', manager_comment: comment });
+  closeModal('rejectModal');
+  await loadAll();
+  showToast('반려 처리되었습니다.', 'success');
 }
 
 // ── 집행 내역 ──
