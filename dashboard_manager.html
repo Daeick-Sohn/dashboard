@@ -932,14 +932,36 @@ function renderTaskChart(data) {
 }
 
 function renderBudgetChart() {
-  const depts = ['system','rc','communication'];
-  const labels = ['비교과통합시스템','RC 프로그램','의사소통 교육'];
   const execMap = buildExecMap();
-  const budgeted = depts.map(d => allPlans.filter(p=>p.department===d).reduce((s,p)=>s+(+p.budgeted_amount||0),0));
-  const executed = depts.map(d => allPlans.filter(p=>p.department===d).reduce((s,p)=>s+(execMap[p.id]||0),0));
+  let labels, budgeted, executed;
+
+  if(currentDept === 'all') {
+    // 전체 탭: 3개 부서 비교
+    const depts = ['system','rc','communication'];
+    labels = ['비교과통합시스템','RC 프로그램','의사소통 교육'];
+    budgeted = depts.map(d => allPlans.filter(p=>p.department===d).reduce((s,p)=>s+(+p.budgeted_amount||0),0));
+    executed = depts.map(d => allPlans.filter(p=>p.department===d).reduce((s,p)=>s+(execMap[p.id]||0),0));
+  } else {
+    // 특정 부서 탭: 세부 프로그램별 비교
+    const deptPlans = allPlans.filter(p => p.department === currentDept && (p.status||'approved')==='approved');
+    labels = deptPlans.map(p => p.title.length > 10 ? p.title.substring(0,10)+'…' : p.title);
+    budgeted = deptPlans.map(p => +p.budgeted_amount||0);
+    executed = deptPlans.map(p => execMap[p.id]||0);
+    if(!labels.length) { labels=['데이터 없음']; budgeted=[0]; executed=[0]; }
+  }
+
   const ctx = document.getElementById('budgetChart').getContext('2d');
   if(budgetChart) budgetChart.destroy();
-  budgetChart = new Chart(ctx, { type:'bar', data:{labels,datasets:[{label:'예산액',data:budgeted,backgroundColor:'rgba(99,102,241,0.2)',borderColor:'#6366f1',borderWidth:2},{label:'집행액',data:executed,backgroundColor:'rgba(16,185,129,0.7)',borderColor:'#059669',borderWidth:2}]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:12}}}},scales:{y:{beginAtZero:true,ticks:{callback:v=>v.toLocaleString()+'원'}}}} });
+  budgetChart = new Chart(ctx, {
+    type:'bar',
+    data:{ labels, datasets:[
+      {label:'예산액',data:budgeted,backgroundColor:'rgba(99,102,241,0.2)',borderColor:'#6366f1',borderWidth:2},
+      {label:'집행액',data:executed,backgroundColor:'rgba(16,185,129,0.7)',borderColor:'#059669',borderWidth:2}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom',labels:{font:{size:12}}}},
+      scales:{y:{beginAtZero:true,ticks:{callback:v=>v.toLocaleString()+'원'}}}}
+  });
 }
 
 // ── 업무 과제 ──
@@ -1022,7 +1044,10 @@ function renderBudget() {
   budget.sort((a,b)=>{ const ta=a.title||'',tb=b.title||''; if(ta<tb)return -1;if(ta>tb)return 1; const da=a.execution_date||a.created_at||''; const db=b.execution_date||b.created_at||''; return da<db?-1:da>db?1:0; });
 
   tbody.innerHTML = budget.map(b=>{
-    const plan = allPlans.find(p=>p.title===b.title && (p.budget_item||(b.budget_item||b.category))?p.budget_item===(b.budget_item||b.category):true);
+    const bItem = b.budget_item||b.category||'';
+    const plan = b.plan_id
+      ? allPlans.find(p=>p.id===b.plan_id)
+      : allPlans.find(p=>p.title===b.title && p.budget_item===bItem && p.department===b.department);
     const planBudg = plan ? +plan.budgeted_amount||0 : +b.budgeted_amount||0;
     const running = progRunningMap.get(b.id)||{cumExec:0,remain:planBudg,rate:0};
     const r = running.rate; const color = r>=90?'#dc2626':r>=70?'#d97706':'#059669';
