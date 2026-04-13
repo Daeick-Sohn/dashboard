@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>예산관리 대시보드 — 직원 사용 가이드</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --blue: #1d4ed8;
+    --blue-light: #eff6ff;
+    --blue-mid: #bfdbfe;
+    --green: #15803d;
+    --green-light: #f0fdf4;
+    --amber: #92400e;
+    --amber-light: #fffbeb;
+    --red: #991b1b;
+    --red-light: #fff1f2;
+    --gray-50: #f9fafb;
+    --gray-100: #f3f4f6;
+    --gray-200: #e5e7eb;
+    --gray-400: #9ca3af;
+    --gray-600: #4b5563;
+    --gray-800: #1f2937;
+    --gray-900: #111827;
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Noto Sans KR', sans-serif;
+    background: #f8f9fc;
+    color: var(--gray-800);
+    line-height: 1.7;
+    font-size: 15px;
+  }
+
+  /* ── 사이드바 ── */
+  .sidebar {
+    position: fixed;
+    top: 0; left: 0;
+    width: 220px; height: 100vh;
+    background: #fff;
+    border-right: 1px solid var(--gray-200);
+    padding: 2rem 1.2rem;
+    overflow-y: auto;
+    z-index: 100;
+  }
+  .sidebar-logo {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--blue);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .sidebar-sub {
+    font-size: 11px;
+    color: var(--gray-400);
+    margin-bottom: 1.8rem;
+    padding-bottom: 1.2rem;
+    border-bottom: 1px solid var(--gray-200);
+  }
+  .nav-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--gray-400);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    color: var(--gray-600);
+    text-decoration: none;
+    margin-bottom: 2px;
+    transition: background 0.15s, color 0.15s;
+  }
+  .nav-item:hover { background: var(--blue-light); color: var(--blue); }
+  .nav-item.active { background: var(--blue-light); color: var(--blue); font-weight: 500; }
+  .nav-num {
+    width: 20px; height: 20px;
+    background: var(--gray-100);
+    border-radius: 50%;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--gray-600);
+    flex-shrink: 0;
+  }
+  .nav-item.active .nav-num { background: var(--blue); color: #fff; }
+
+  /* ── 메인 콘텐츠 ── */
+  .main {
+    margin-left: 220px;
+    max-width: 780px;
+    padding: 3rem 3rem 4rem;
+  }
+
+  /* ── 커버 ── */
+  .cover {
+    margin-bottom: 3rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid var(--gray-200);
+  }
+  .cover-badge {
+    display: inline-block;
+    background: var(--blue-light);
+    color: var(--blue);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    border-radius: 20px;
+    margin-bottom: 14px;
+  }
+  .cover h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--gray-900);
+    line-height: 1.3;
+    margin-bottom: 10px;
+  }
+  .cover p {
+    font-size: 15px;
+    color: var(--gray-600);
+  }
+  .cover-meta {
+    display: flex;
+    gap: 20px;
+    margin-top: 1.2rem;
+    font-size: 12px;
+    color: var(--gray-400);
+  }
+  .cover-meta span { display: flex; align-items: center; gap: 5px; }
+
+  /* ── 섹션 ── */
+  .section {
+    margin-bottom: 3rem;
+    scroll-margin-top: 2rem;
+  }
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 1.2rem;
+  }
+  .sec-num {
+    width: 32px; height: 32px;
+    background: var(--blue);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .section-header h2 {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--gray-900);
+  }
+  .section p {
+    font-size: 14px;
+    color: var(--gray-600);
+    margin-bottom: 10px;
+  }
+  hr.divider {
+    border: none;
+    border-top: 1px solid var(--gray-200);
+    margin: 2.5rem 0;
+  }
+
+  /* ── 스텝 ── */
+  .steps { list-style: none; padding: 0; margin: 14px 0; }
+  .steps li {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    margin-bottom: 12px;
+    font-size: 14px;
+    color: var(--gray-600);
+    line-height: 1.7;
+  }
+  .step-dot {
+    min-width: 24px; height: 24px;
+    background: var(--blue-light);
+    color: var(--blue);
+    border-radius: 50%;
+    font-size: 12px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .steps li strong { color: var(--gray-900); font-weight: 500; }
+
+  /* ── 콜아웃 ── */
+  .callout {
+    display: flex;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    line-height: 1.7;
+    margin: 12px 0;
+    border-left: 3px solid;
+  }
+  .callout.info { background: var(--blue-light); color: #1e40af; border-color: var(--blue); }
+  .callout.tip { background: var(--green-light); color: #166534; border-color: var(--green); }
+  .callout.warn { background: var(--amber-light); color: var(--amber); border-color: #d97706; }
+  .callout.danger { background: var(--red-light); color: var(--red); border-color: #dc2626; }
+  .callout-icon { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
+
+  /* ── 상태 뱃지 ── */
+  .status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin: 12px 0;
+  }
+  .status-card {
+    background: #fff;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+  }
+  .status-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .status-card .label { color: var(--gray-600); }
+  .status-card .desc { font-size: 11px; color: var(--gray-400); }
+
+  /* ── 필드 태그 ── */
+  .field-wrap { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+  .field-tag {
+    background: #fff;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-sm);
+    padding: 4px 10px;
+    font-size: 12px;
+    color: var(--gray-600);
+  }
+  .field-tag.req { border-color: var(--blue-mid); color: var(--blue); background: var(--blue-light); }
+
+  /* ── 서브 제목 ── */
+  h3.sub {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--gray-800);
+    margin: 1.4rem 0 8px;
+  }
+
+  /* ── 테이블 ── */
+  .tbl-wrap { overflow-x: auto; margin: 12px 0; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  th {
+    background: var(--gray-50);
+    color: var(--gray-600);
+    font-weight: 600;
+    padding: 9px 12px;
+    text-align: left;
+    border: 1px solid var(--gray-200);
+  }
+  td {
+    padding: 9px 12px;
+    border: 1px solid var(--gray-200);
+    color: var(--gray-600);
+    vertical-align: top;
+    line-height: 1.6;
+  }
+  tr:hover td { background: var(--gray-50); }
+
+  /* ── UI 모크 ── */
+  .ui-mock {
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    font-size: 13px;
+    color: var(--gray-600);
+    margin: 10px 0;
+  }
+  .btn-mock {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    font-weight: 500;
+    margin: 3px;
+    border: 1px solid transparent;
+  }
+  .btn-blue { background: var(--blue-light); color: var(--blue); border-color: var(--blue-mid); }
+  .btn-green { background: var(--green-light); color: var(--green); }
+  .btn-red { background: var(--red-light); color: var(--red); }
+  .btn-gray { background: #fff; color: var(--gray-600); border-color: var(--gray-200); }
+
+  /* ── 푸터 ── */
+  .footer {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--gray-200);
+    font-size: 12px;
+    color: var(--gray-400);
+    text-align: center;
+  }
+
+  /* ── 모바일 ── */
+  @media (max-width: 680px) {
+    .sidebar { display: none; }
+    .main { margin-left: 0; padding: 1.5rem 1.2rem 3rem; }
+  }
+
+  code {
+    font-family: 'DM Mono', monospace;
+    background: var(--gray-100);
+    border: 1px solid var(--gray-200);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 12px;
+    color: var(--gray-800);
+  }
+</style>
+</head>
+<body>
+
+<!-- 사이드바 -->
+<nav class="sidebar">
+  <div class="sidebar-logo">예산관리</div>
+  <div class="sidebar-sub">직원 사용 가이드</div>
+  <div class="nav-label">목차</div>
+  <a class="nav-item" href="#s1"><span class="nav-num">1</span> 화면 구성</a>
+  <a class="nav-item" href="#s2"><span class="nav-num">2</span> 개별 등록</a>
+  <a class="nav-item" href="#s3"><span class="nav-num">3</span> 엑셀 업로드</a>
+  <a class="nav-item" href="#s4"><span class="nav-num">4</span> 수정하기</a>
+  <a class="nav-item" href="#s5"><span class="nav-num">5</span> 계획 제출</a>
+  <a class="nav-item" href="#s6"><span class="nav-num">6</span> 삭제</a>
+  <a class="nav-item" href="#s7"><span class="nav-num">?</span> 자주 묻는 질문</a>
+</nav>
+
+<!-- 메인 -->
+<main class="main">
+
+  <!-- 커버 -->
+  <div class="cover">
+    <div class="cover-badge">직원용 매뉴얼</div>
+    <h1>예산관리 대시보드<br>사용 가이드</h1>
+    <p>예산계획 등록부터 제출, 수정, 삭제까지<br>직원이 알아야 할 모든 것을 담았습니다.</p>
+    <div class="cover-meta">
+      <span>📄 직원용</span>
+      <span>🕐 읽는 시간 약 3분</span>
+    </div>
+  </div>
+
+  <!-- 1 -->
+  <div class="section" id="s1">
+    <div class="section-header">
+      <div class="sec-num">1</div>
+      <h2>대시보드 접속 및 화면 구성</h2>
+    </div>
+    <p>브라우저에서 대시보드 주소로 접속한 뒤, 부서에서 안내받은 계정으로 로그인하세요. 직원 계정으로 로그인하면 직원 대시보드가 열립니다.</p>
+
+    <h3 class="sub">주요 화면 구성</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>영역</th><th>설명</th></tr></thead>
+        <tbody>
+          <tr><td>상단 헤더</td><td>현재 연도/월 기간, 로그인 계정명, 로그아웃 버튼</td></tr>
+          <tr><td>예산계획 목록</td><td>내가 등록한 계획 카드 목록. 상태별 색상으로 구분</td></tr>
+          <tr><td>등록 버튼</td><td>새 예산계획을 개별 등록할 때 사용</td></tr>
+          <tr><td>엑셀 업로드</td><td>여러 건을 한 번에 올릴 때 사용</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 class="sub">카드 상태 색상 안내</h3>
+    <div class="status-grid">
+      <div class="status-card">
+        <div class="status-dot" style="background:#9ca3af"></div>
+        <div><div class="label">작성 중</div><div class="desc">아직 제출 전</div></div>
+      </div>
+      <div class="status-card">
+        <div class="status-dot" style="background:#1d4ed8"></div>
+        <div><div class="label">제출됨</div><div class="desc">파란색 테두리</div></div>
+      </div>
+      <div class="status-card">
+        <div class="status-dot" style="background:#15803d"></div>
+        <div><div class="label">승인 완료</div><div class="desc">초록색</div></div>
+      </div>
+      <div class="status-card">
+        <div class="status-dot" style="background:#dc2626"></div>
+        <div><div class="label">반려</div><div class="desc">빨간색</div></div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- 2 -->
+  <div class="section" id="s2">
+    <div class="section-header">
+      <div class="sec-num">2</div>
+      <h2>예산계획 개별 등록</h2>
+    </div>
+    <p>한 건씩 직접 입력할 때 사용합니다.</p>
+    <ul class="steps">
+      <li><span class="step-dot">1</span><span><strong>등록 버튼</strong>을 클릭합니다.</span></li>
+      <li><span class="step-dot">2</span><span>아래 항목을 빠짐없이 입력합니다.</span></li>
+      <li><span class="step-dot">3</span><span>내용을 확인한 후 <strong>저장</strong> 버튼을 누릅니다.</span></li>
+    </ul>
+
+    <h3 class="sub">입력 항목</h3>
+    <div class="field-wrap">
+      <span class="field-tag req">부서 *</span>
+      <span class="field-tag req">업무(세부 프로그램) *</span>
+      <span class="field-tag req">세목 *</span>
+      <span class="field-tag req">예산액 *</span>
+      <span class="field-tag">담당자</span>
+      <span class="field-tag">연도 / 월</span>
+    </div>
+    <p style="font-size:12px;color:var(--gray-400)">* 표시 항목은 필수 입력입니다.</p>
+
+    <div class="callout tip">
+      <span class="callout-icon">✓</span>
+      <span><strong>업무 + 세부 프로그램 + 세목</strong> 조합이 동일한 항목이 이미 있으면 자동으로 덮어쓰기됩니다. 중복 등록을 걱정하지 않아도 됩니다.</span>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- 3 -->
+  <div class="section" id="s3">
+    <div class="section-header">
+      <div class="sec-num">3</div>
+      <h2>엑셀 파일로 일괄 업로드</h2>
+    </div>
+    <p>여러 건의 예산계획을 한 번에 올릴 때 사용합니다. 업로드 전에 엑셀 양식을 먼저 확인하세요.</p>
+    <ul class="steps">
+      <li><span class="step-dot">1</span><span><strong>엑셀 양식 다운로드</strong> 버튼으로 샘플 파일을 받습니다.</span></li>
+      <li><span class="step-dot">2</span><span>샘플 파일 형식에 맞춰 데이터를 입력합니다. <strong>첫 번째 행(헤더)은 수정하지 마세요.</strong></span></li>
+      <li><span class="step-dot">3</span><span><strong>엑셀 업로드</strong> 버튼을 눌러 작성한 파일을 선택합니다.</span></li>
+      <li><span class="step-dot">4</span><span>업로드 결과 메시지에서 신규 등록 건수와 수정 건수를 확인합니다.</span></li>
+    </ul>
+
+    <h3 class="sub">업로드 완료 메시지 예시</h3>
+    <div class="ui-mock">
+      <span style="color:#15803d;font-weight:600">✓ 업로드 완료! 신규 5건 / 수정 2건</span>
+    </div>
+
+    <div class="callout warn">
+      <span class="callout-icon">⚠</span>
+      <span>업무 + 세부 프로그램 + 세목이 동일한 항목은 <strong>덮어쓰기</strong>됩니다. 수정을 원하지 않는 항목은 파일에서 제외하세요.</span>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- 4 -->
+  <div class="section" id="s4">
+    <div class="section-header">
+      <div class="sec-num">4</div>
+      <h2>등록한 계획 수정하기</h2>
+    </div>
+    <p>아직 제출하지 않은 계획은 언제든지 수정할 수 있습니다.</p>
+    <ul class="steps">
+      <li><span class="step-dot">1</span><span>수정할 계획 카드를 클릭합니다.</span></li>
+      <li><span class="step-dot">2</span><span>수정 아이콘(연필 모양) 또는 <strong>수정</strong> 버튼을 누릅니다.</span></li>
+      <li><span class="step-dot">3</span><span>내용을 변경한 후 <strong>저장</strong>을 누릅니다.</span></li>
+    </ul>
+    <div class="callout info">
+      <span class="callout-icon">ℹ</span>
+      <span>제출 이후 수정이 필요하면 담당 팀장에게 <strong>반려 요청</strong> 후 수정하세요.</span>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- 5 -->
+  <div class="section" id="s5">
+    <div class="section-header">
+      <div class="sec-num">5</div>
+      <h2>계획 제출 (승인 요청)</h2>
+    </div>
+    <p>작성이 완료된 계획을 팀장에게 승인 요청합니다. 제출 후에는 카드가 파란색 테두리로 표시됩니다.</p>
+    <ul class="steps">
+      <li><span class="step-dot">1</span><span>제출할 계획 카드를 클릭합니다.</span></li>
+      <li><span class="step-dot">2</span><span><strong>제출</strong> 버튼을 누릅니다.</span></li>
+      <li><span class="step-dot">3</span><span>확인 팝업에서 <strong>확인</strong>을 선택합니다.</span></li>
+    </ul>
+    <div class="callout warn">
+      <span class="callout-icon">⚠</span>
+      <span>제출 후에는 직접 수정할 수 없습니다. 내용을 충분히 확인한 후 제출하세요.</span>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- 6 -->
+  <div class="section" id="s6">
+    <div class="section-header">
+      <div class="sec-num">6</div>
+      <h2>계획 삭제 (개별 / 일괄)</h2>
+    </div>
+
+    <h3 class="sub">개별 삭제</h3>
+    <ul class="steps">
+      <li><span class="step-dot">1</span><span>삭제할 계획 카드의 <strong>삭제 버튼(휴지통 아이콘)</strong>을 클릭합니다.</span></li>
+      <li><span class="step-dot">2</span><span>확인 팝업에서 <strong>확인</strong>을 누르면 삭제됩니다.</span></li>
+    </ul>
+
+    <h3 class="sub">일괄 삭제</h3>
+    <ul class="steps">
+      <li><span class="step-dot">1</span><span>카드 목록 위의 <strong>전체 선택</strong> 체크박스를 누르거나, 각 카드의 체크박스를 개별 선택합니다.</span></li>
+      <li><span class="step-dot">2</span><span>상단에 나타나는 파란 액션 바에서 <span class="btn-mock btn-red">🗑 일괄 삭제</span> 버튼을 클릭합니다.</span></li>
+      <li><span class="step-dot">3</span><span>확인 팝업에서 건수를 확인하고 <strong>확인</strong>을 누릅니다.</span></li>
+    </ul>
+
+    <div class="callout danger">
+      <span class="callout-icon">⚠</span>
+      <span>삭제된 데이터는 <strong>복구되지 않습니다.</strong> 삭제 전 반드시 다시 한 번 확인하세요.</span>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- 7 -->
+  <div class="section" id="s7">
+    <div class="section-header">
+      <div class="sec-num">?</div>
+      <h2>자주 묻는 질문</h2>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th style="width:42%">질문</th><th>답변</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>엑셀 업로드 후 기존 데이터가 바뀌었어요.</td>
+            <td>같은 업무+세부 프로그램+세목 조합이면 덮어쓰기됩니다. 원래 내용이 새 파일 내용으로 교체된 것입니다.</td>
+          </tr>
+          <tr>
+            <td>제출한 계획을 수정하고 싶어요.</td>
+            <td>팀장에게 반려 요청을 하면 다시 수정 가능한 상태로 돌아옵니다.</td>
+          </tr>
+          <tr>
+            <td>승인된 계획도 삭제할 수 있나요?</td>
+            <td>권한에 따라 다를 수 있습니다. 승인된 계획 삭제가 필요하면 팀장에게 문의하세요.</td>
+          </tr>
+          <tr>
+            <td>체크박스가 보이지 않아요.</td>
+            <td>카드가 하나 이상 있을 때만 표시됩니다. 계획을 먼저 등록하세요.</td>
+          </tr>
+          <tr>
+            <td>로그인이 안 돼요.</td>
+            <td>아이디/비밀번호를 확인하거나, 담당 관리자에게 계정 초기화를 요청하세요.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="footer">
+    예산관리 대시보드 직원용 사용 가이드 &nbsp;·&nbsp; 문의: 담당 팀장 또는 시스템 관리자
+  </div>
+</main>
+
+<script>
+  const navItems = document.querySelectorAll('.nav-item');
+  const sections = document.querySelectorAll('.section');
+
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if(entry.isIntersecting) {
+        navItems.forEach(a => a.classList.remove('active'));
+        const target = document.querySelector(`.nav-item[href="#${entry.target.id}"]`);
+        if(target) target.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-30% 0px -60% 0px' });
+
+  sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>
