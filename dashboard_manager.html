@@ -557,7 +557,7 @@ cursor:pointer; border:2px solid; transition:all 0.2s; background:white; font-fa
 const user = requireAuth(['manager']);
 if(user) document.getElementById('sideUserName').textContent = user.name;
 
-let allTasks=[], allBudget=[], allEvals=[], allNotices=[], allPlans=[];
+let allTasks=[], allBudget=[], allEvals=[], allNotices=[], allPlans=[], allPrograms=[];
 let currentDept='all', currentView='monthly', currentYear=CUR_YEAR, currentPeriod=CUR_MONTH;
 let currentBudgetTab='plan';
 let taskChart=null, budgetChart=null;
@@ -658,9 +658,9 @@ function populatePlanItemSel() {
 async function loadAll() {
   currentYear = parseInt(document.getElementById('yearSel').value);
   currentPeriod = parseInt(document.getElementById('periodSel').value) || 0;
-  const [t, b, e, n, p] = await Promise.all([
+  const [t, b, e, n, p, pg] = await Promise.all([
     DB.getAll('tasks'), DB.getAll('budget'), DB.getAll('evaluations'),
-    DB.getAll('notices'), DB.getAll('budget_plan'),
+    DB.getAll('notices'), DB.getAll('budget_plan'), DB.getAll('programs'),
   ]);
   allTasks = t.filter(r => !r.deleted);
   // 집행액 > 0인 건만 집행 내역으로 취급
@@ -668,6 +668,7 @@ async function loadAll() {
   allEvals = e.filter(r => !r.deleted);
   allNotices = n.filter(r => !r.deleted);
   allPlans = p.filter(r => !r.deleted && r.year == currentYear);
+  allPrograms = pg.filter(r => !r.deleted);
   renderAll();
   updateUnconfirmedBadge();
 }
