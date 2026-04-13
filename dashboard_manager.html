@@ -1156,7 +1156,10 @@ function onPlanDeptChange() {
   const d = document.getElementById('pnDept').value;
   const sel = document.getElementById('pnAssignee');
   sel.querySelectorAll('option').forEach(o => { if(!o.value) return; o.style.display = (!o.dataset.dept || o.dataset.dept===d) ? '' : 'none'; });
-  if(typeof populateProgramSelect !== 'undefined') populateProgramSelect(d, '');
+  // 담당자 선택 초기화
+  sel.value = '';
+  // 세부 프로그램 목록 업데이트
+  populatePlanProgramSelect(d, '');
 }
 function populatePlanTitleSelect(dept, selected) {
   const sel = document.getElementById('pnTitle');
@@ -1177,8 +1180,17 @@ function openPlanModal() {
   document.getElementById('pnMonth').value='';
   document.getElementById('pnYear').value=CUR_YEAR;
   document.getElementById('planModalTitle').textContent='예산 계획 추가';
-  const d = document.getElementById('pnDept').value || 'system';
-  populatePlanProgramSelect(d, '');
+  // 현재 선택된 부서 탭에 맞춰 기본 업무 구분 설정
+  const defaultDept = currentDept !== 'all' ? currentDept : 'system';
+  document.getElementById('pnDept').value = defaultDept;
+  // 담당자 필터도 해당 부서로 맞추기
+  const assigneeSel = document.getElementById('pnAssignee');
+  assigneeSel.querySelectorAll('option').forEach(o => {
+    if(!o.value) return;
+    o.style.display = (!o.dataset.dept || o.dataset.dept===defaultDept) ? '' : 'none';
+  });
+  assigneeSel.value = '';
+  populatePlanProgramSelect(defaultDept, '');
   document.getElementById('planModal').classList.add('show');
 }
 function editPlan(id) {
