@@ -989,16 +989,17 @@ function renderTasks() {
 function populatePlanProgramSelect(dept, selected) {
   const sel = document.getElementById('pnTitle');
   if(!sel) return;
-  const names = [...new Set(
-    allPrograms.filter(p=>p.department===dept||!p.department).map(p=>p.name||'')
-    .concat(allPlans.filter(p=>p.department===dept).map(p=>p.title||''))
-    .filter(Boolean)
-  )].sort();
+  const list = (typeof DEPT_PROGRAMS !== 'undefined' && DEPT_PROGRAMS[dept]) ? DEPT_PROGRAMS[dept] : [];
+  const planNames = allPlans.filter(p=>p.department===dept).map(p=>p.title||'');
+  const names = [...new Set([...list, ...planNames].filter(Boolean))];
+  const isOther = selected && !list.includes(selected);
   let opts = '<option value="">세부 프로그램 선택 *</option>';
   names.forEach(n => opts += `<option value="${n}" ${n===selected?'selected':''}>${n}</option>`);
-  opts += '<option value="__other__">직접 입력...</option>';
+  opts += `<option value="__other__" ${isOther?'selected':''}>기타(직접 입력)</option>`;
   sel.innerHTML = opts;
-  if(selected) sel.value = selected;
+  if(selected && !isOther) sel.value = selected;
+  const inp = document.getElementById('pnTitleOther');
+  if(inp){ if(isOther){inp.style.display='block';inp.value=selected||'';}else{inp.style.display='none';inp.value='';} }
 }
 // ── 예산 계획 승인/반려 ──
 async function approvePlan(id) {
