@@ -247,7 +247,18 @@ cursor:pointer; border:2px solid; transition:all 0.2s; background:white; font-fa
           <option value="">전체 세목</option>
         </select>
       </div>
-      <div id="planCardGrid" class="plan-grid"></div>
+      <!-- 일괄 액션 바 -->
+<div id="bulkActionBar" style="display:none;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+  <span id="bulkSelectedCount" style="font-size:13px;font-weight:600;color:#2563eb">0건 선택됨</span>
+  <button class="btn btn-sm" style="background:#059669;color:white" onclick="bulkApprovePlans()"><i class="fas fa-check"></i> 일괄 승인</button>
+  <button class="btn btn-sm" style="background:#dc2626;color:white" onclick="bulkDeletePlans()"><i class="fas fa-trash"></i> 일괄 삭제</button>
+  <button class="btn btn-sm btn-outline" onclick="clearBulkSelect()">선택 해제</button>
+</div>
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+  <input type="checkbox" id="selectAllPlans" onchange="toggleSelectAll(this)" style="width:16px;height:16px">
+  <label for="selectAllPlans" style="font-size:13px;color:#6b7280;cursor:pointer">전체 선택</label>
+</div>
+<div id="planCardGrid" class="plan-grid"></div>
       <!-- 계획 합계 -->
       <div id="planSummary" style="padding:12px 0 0;border-top:2px solid #f1f5f9;margin-top:4px"></div>
     </div>
@@ -763,7 +774,13 @@ function renderPlanCards() {
     const isSubmitted = st==='submitted';
     return `<div class="plan-card" style="border-left-color:${col}${isSubmitted?';box-shadow:0 0 0 2px #2563eb33':''}">
       <div class="pc-header">
-        <span class="pc-prog">${p.title}</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input type="checkbox" class="plan-check" data-id="${p.id}" 
+            ${selectedPlanIds.has(p.id)?'checked':''} 
+            onchange="togglePlanSelect('${p.id}',this.checked)"
+            style="width:15px;height:15px;cursor:pointer">
+          <span class="pc-prog">${p.title}</span>
+        </div>
         <div style="display:flex;gap:4px;align-items:center">
           ${planStatusBadge(st)}
           <span class="pc-dept" style="background:${col}18;color:${col}">${deptLabel[p.department]||''}</span>
@@ -1241,7 +1258,7 @@ async function uploadPlanExcel(input) {
     const ws = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
 
-    let created=0, skipped=0;
+    let created=0, updated=0, skipped=0;
     for(let i=1; i<rows.length; i++) {
       const [deptRaw, title, itemRaw, amtRaw, assigneeRaw] = rows[i];
       if(!title || !amtRaw) { skipped++; continue; }
@@ -1249,16 +1266,27 @@ async function uploadPlanExcel(input) {
       const budget_item = ITEM_MAP[String(itemRaw).trim()] || String(itemRaw).trim();
       const budgeted_amount = parseFloat(String(amtRaw).replace(/,/g,''))||0;
       const member = MEMBER_MAP[String(assigneeRaw||'').trim()];
-      const planData = {
+            const planData = {
         department: dept, title: String(title).trim(), budget_item,
         budgeted_amount, year: currentYear, month: currentPeriod||null,
         assignee_id: member?.id||String(assigneeRaw||'').trim(),
         assignee_name: member?.name||String(assigneeRaw||'').trim(),
       };
-      await DB.create('budget_plan', planData);
-      created++;
+      // 같은 업무+세부프로그램+세목 조합이 있으면 덮어쓰기
+      const existing = allPlans.find(p =>
+        p.department === dept &&
+        p.title === planData.title &&
+        p.budget_item === budget_item
+      );
+      if(existing) {
+        await DB.update('budget_plan', existing.id, planData);
+        updated++;
+      } else {
+        await DB.create('budget_plan', planData);
+        created++;
+      }
     }
-    showToast(`${created}건 업로드 완료${skipped?` (${skipped}건 건너뜀)`:''}`, 'success');
+showToast(`업로드 완료! 신규 ${created}건 / 수정 ${updated}건${skipped?` / 건너뜀 ${skipped}건`:''}`, 'success');
     input.value='';
     await loadAll();
   } catch(e) {
@@ -1424,7 +1452,73 @@ function onBudgetProgramChange() {
     summaryEl.innerHTML=`<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:12px"><span>📌 <strong>${progName}</strong></span><span>예산: <strong>${formatMoney(+plan.budgeted_amount||0)}</strong></span><span>기집행: <strong style="color:${color}">${formatMoney(execSum)}</strong></span><span>잔액: <strong style="color:${remain<0?'#dc2626':'#059669'}">${formatMoney(remain)}</strong></span><span>집행률: <strong style="color:${color}">${rate}%</strong></span></div>`;
   } else { summaryEl.style.display='none'; }
 }
+// ── 일괄 선택/삭제/승인 ──
+let selectedPlanIds = new Set();
 
+function toggleSelectAll(checkbox) {
+  const cards = document.querySelectorAll('.plan-check');
+  cards.forEach(cb => {
+    cb.checked = checkbox.checked;
+    const id = cb.dataset.id;
+    if(checkbox.checked) selectedPlanIds.add(id);
+    else selectedPlanIds.delete(id);
+  });
+  updateBulkBar();
+}
+
+function togglePlanSelect(id, checked) {
+  if(checked) selectedPlanIds.add(id);
+  else selectedPlanIds.delete(id);
+  updateBulkBar();
+  // 전체선택 체크박스 상태 동기화
+  const all = document.querySelectorAll('.plan-check');
+  const allChecked = [...all].every(cb => cb.checked);
+  const selectAll = document.getElementById('selectAllPlans');
+  if(selectAll) selectAll.checked = allChecked;
+}
+
+function updateBulkBar() {
+  const bar = document.getElementById('bulkActionBar');
+  const cnt = document.getElementById('bulkSelectedCount');
+  if(!bar) return;
+  if(selectedPlanIds.size > 0) {
+    bar.style.display = 'flex';
+    cnt.textContent = `${selectedPlanIds.size}건 선택됨`;
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+function clearBulkSelect() {
+  selectedPlanIds.clear();
+  document.querySelectorAll('.plan-check').forEach(cb => cb.checked = false);
+  const selectAll = document.getElementById('selectAllPlans');
+  if(selectAll) selectAll.checked = false;
+  updateBulkBar();
+}
+
+async function bulkDeletePlans() {
+  if(selectedPlanIds.size === 0) return;
+  if(!confirm(`선택한 ${selectedPlanIds.size}건을 삭제하시겠습니까?`)) return;
+  for(const id of selectedPlanIds) {
+    await DB.remove('budget_plan', id);
+  }
+  selectedPlanIds.clear();
+  await loadAll();
+  showToast(`${selectedPlanIds.size > 0 ? selectedPlanIds.size : '선택'}건 삭제되었습니다`);
+}
+
+async function bulkApprovePlans() {
+  if(selectedPlanIds.size === 0) return;
+  if(!confirm(`선택한 ${selectedPlanIds.size}건을 일괄 승인하시겠습니까?`)) return;
+  const count = selectedPlanIds.size;
+  for(const id of selectedPlanIds) {
+    await DB.update('budget_plan', id, { status:'approved', approved_at: new Date().toISOString() });
+  }
+  selectedPlanIds.clear();
+  await loadAll();
+  showToast(`${count}건 승인되었습니다`, 'success');
+}
 function closeModal(id){ document.getElementById(id).classList.remove('show'); }
 function showToast(msg,type=''){ const el=document.getElementById('toast'); document.getElementById('toastMsg').textContent=msg; el.className='toast show'+(type?' '+type:''); setTimeout(()=>el.classList.remove('show'),2500); }
 function copyMyLink(){ const token=(user&&user.token)?user.token:''; if(!token){showToast('링크 정보를 찾을 수 없습니다','error');return;} const base=location.origin+location.pathname.replace('dashboard_manager.html',''); const url=`${base}dashboard_manager.html?key=${token}`; navigator.clipboard.writeText(url).then(()=>showToast('내 접근 링크가 복사되었습니다','success')); }
