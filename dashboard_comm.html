@@ -706,7 +706,7 @@ function renderBudget(){
   const execMap=buildExecMap();
   const progRunningMap=new Map();
   const progGroups={};
-  allBudget.forEach(r=>{ const k=r.title||''; if(!progGroups[k])progGroups[k]=[]; progGroups[k].push(r); });
+  allBudget.forEach(r=>{ const k=(r.title||'')+'|'+(r.budget_item||r.category||''); if(!progGroups[k])progGroups[k]=[]; progGroups[k].push(r); });
   Object.entries(progGroups).forEach(([prog,rows])=>{
     rows.sort((a,b)=>{ const da=a.execution_date||a.created_at||''; const db=b.execution_date||b.created_at||''; return da<db?-1:da>db?1:0; });
     let cum=0;
@@ -714,7 +714,7 @@ function renderBudget(){
       const rItem=r.budget_item||r.category||'';
       const rPlan=r.plan_id
         ? allPlans.find(p=>p.id===r.plan_id)
-        : allPlans.find(p=>p.title===prog && p.budget_item===rItem);
+        : allPlans.find(p=>p.title===prog.split('|')[0] && p.budget_item===rItem);
       const totalB=rPlan?+rPlan.budgeted_amount||0:0;
       cum+=(+r.executed_amount||0);
       progRunningMap.set(r.id,{cumExec:cum,remain:totalB-cum,rate:totalB>0?Math.min(Math.round(cum/totalB*100),999):0});
