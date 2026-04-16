@@ -1404,7 +1404,7 @@ function onTaskDeptChange() {
   const d = document.getElementById('tDept').value;
   const sel = document.getElementById('tAssignee');
   sel.querySelectorAll('option').forEach(o=>{ if(!o.value)return; o.style.display=(!o.dataset.dept||o.dataset.dept===d)?'':'none'; });
-  if(typeof populateProgramSelect!=='undefined') populateProgramSelect(d,'');
+  if(typeof populateTaskProgramSelect!=='undefined') populateTaskProgramSelect(d,'');
 }
 function onBudgetDeptChange() {
   const d = document.getElementById('bDept').value;
@@ -1417,10 +1417,10 @@ function openTaskModal() {
   document.getElementById('tYear').value=CUR_YEAR; document.getElementById('tMonth').value=CUR_MONTH;
   document.getElementById('tStartDate').value=getToday(); document.getElementById('tDueDate').value='';
   document.getElementById('taskModalTitle').textContent='과제 추가';
-  if(typeof populateProgramSelect!=='undefined') populateProgramSelect('system','');
+  if(typeof populateTaskProgramSelect!=='undefined') populateTaskProgramSelect('system','');
   document.getElementById('taskModal').classList.add('show');
 }
-function editTask(id){ const t=allTasks.find(x=>x.id===id);if(!t)return; document.getElementById('taskId').value=t.id; document.getElementById('taskModalTitle').textContent='과제 수정'; document.getElementById('tDept').value=t.department||'system'; onTaskDeptChange(); document.getElementById('tAssignee').value=t.assignee_id||''; if(typeof populateProgramSelect!=='undefined') populateProgramSelect(t.department||'system',t.title||''); document.getElementById('tDesc').value=t.description||''; document.getElementById('tPriority').value=t.priority||'medium'; document.getElementById('tStatus').value=t.status||'todo'; document.getElementById('tStartDate').value=t.start_date||''; document.getElementById('tDueDate').value=t.due_date||''; document.getElementById('tYear').value=t.year||CUR_YEAR; document.getElementById('tMonth').value=t.month||CUR_MONTH; document.getElementById('tNote').value=t.note||''; document.getElementById('taskModal').classList.add('show'); }
+function editTask(id){ const t=allTasks.find(x=>x.id===id);if(!t)return; document.getElementById('taskId').value=t.id; document.getElementById('taskModalTitle').textContent='과제 수정'; document.getElementById('tDept').value=t.department||'system'; onTaskDeptChange(); document.getElementById('tAssignee').value=t.assignee_id||''; if(typeof populateTaskProgramSelect!=='undefined') populateTaskProgramSelect(t.department||'system',t.title||''); document.getElementById('tDesc').value=t.description||''; document.getElementById('tPriority').value=t.priority||'medium'; document.getElementById('tStatus').value=t.status||'todo'; document.getElementById('tStartDate').value=t.start_date||''; document.getElementById('tDueDate').value=t.due_date||''; document.getElementById('tYear').value=t.year||CUR_YEAR; document.getElementById('tMonth').value=t.month||CUR_MONTH; document.getElementById('tNote').value=t.note||''; document.getElementById('taskModal').classList.add('show'); }
 async function saveTask(){ const id=document.getElementById('taskId').value; const yr=parseInt(document.getElementById('tYear').value)||CUR_YEAR; const mo=parseInt(document.getElementById('tMonth').value)||CUR_MONTH; const titleVal=getProgramValue('tTitle','tTitleOther'); const assigneeSel=document.getElementById('tAssignee'); const assigneeOpt=assigneeSel.options[assigneeSel.selectedIndex]; const data={department:document.getElementById('tDept').value,title:titleVal,description:document.getElementById('tDesc').value,assignee_id:assigneeSel.value,assignee_name:assigneeOpt?.text||'',priority:document.getElementById('tPriority').value,status:document.getElementById('tStatus').value,start_date:document.getElementById('tStartDate').value,due_date:document.getElementById('tDueDate').value,year:yr,month:mo,quarter:getQuarter(mo),note:document.getElementById('tNote').value};if(!data.title){alert('과제(프로그램)을 선택하세요');return;}if(id)await DB.update('tasks',id,data);else await DB.create('tasks',data);closeModal('taskModal');await loadAll();showToast('저장되었습니다','success'); }
 async function deleteTask(id){ if(!confirm('삭제하시겠습니까?'))return; await DB.remove('tasks',id); await loadAll(); showToast('삭제되었습니다'); }
 
