@@ -461,7 +461,7 @@ window.onload = async () => {
     bItemSel.innerHTML='<option value="">세목 선택</option>';
     BUDGET_ITEMS.forEach(item => bItemSel.innerHTML+=`<option value="${item.value}">${item.label}</option>`);
   }
-  if(typeof populateProgramSelect!=='undefined') populateProgramSelect(DEPT,'');
+  if(typeof populateTaskProgramSelect!=='undefined') populateTaskProgramSelect(DEPT,'');
   await loadAll();
   injectStorageBadge();
 };
