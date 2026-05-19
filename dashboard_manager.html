@@ -1062,7 +1062,7 @@ function renderBudget() {
   // running total
   const progRunningMap = new Map();
   const progGroups = {};
-  allBudget.filter(r=>!r.deleted).forEach(r => { const k=(r.title||'')+'|'+(r.budget_item||r.category||''); if(!progGroups[k])progGroups[k]=[]; progGroups[k].push(r); });
+  allBudget.forEach(r=>{ const k=(r.title||'')+'__'+(r.budget_item||r.category||''); if(!progGroups[k])progGroups[k]=[]; progGroups[k].push(r); });
   Object.entries(progGroups).forEach(([prog,rows]) => {
     rows.sort((a,b)=>{ const da=a.execution_date||a.created_at||''; const db=b.execution_date||b.created_at||''; return da<db?-1:da>db?1:0; });
     let cumExec=0;
