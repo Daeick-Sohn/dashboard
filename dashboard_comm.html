@@ -714,7 +714,7 @@ function renderBudget(){
       const rItem=r.budget_item||r.category||'';
       const rPlan=r.plan_id
         ? allPlans.find(p=>p.id===r.plan_id)
-        : allPlans.find(p=>p.title===prog.split('|')[0] && p.budget_item===rItem);
+        : allPlans.find(p=>p.title===prog.split('__')[0] && p.budget_item===rItem);
       const totalB=rPlan?+rPlan.budgeted_amount||0:0;
       cum+=(+r.executed_amount||0);
       progRunningMap.set(r.id,{cumExec:cum,remain:totalB-cum,rate:totalB>0?Math.min(Math.round(cum/totalB*100),999):0});
