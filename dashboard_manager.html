@@ -1070,7 +1070,7 @@ function renderBudget() {
       const rItem=r.budget_item||r.category||'';
       const rPlan=r.plan_id
         ? allPlans.find(p=>p.id===r.plan_id)
-      : allPlans.find(p=>p.title===prog.split('|')[0] && p.budget_item===rItem && p.department===r.department);
+      : allPlans.find(p=>p.title===prog.split('__')[0] && p.budget_item===rItem && p.department===r.department);
       const totalB=rPlan?+rPlan.budgeted_amount||0:0;
       cumExec+=(+r.executed_amount||0);
       progRunningMap.set(r.id,{cumExec,remain:totalB-cumExec,rate:totalB>0?Math.min(Math.round(cumExec/totalB*100),999):0});
