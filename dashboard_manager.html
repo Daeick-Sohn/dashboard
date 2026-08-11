@@ -762,7 +762,14 @@ function renderPlanCards() {
       (BUDGET_ITEMS.find(i=>i.value===p.budget_item)?.label || p.budget_item) : p.budget_item;
     const st = p.status||'approved';
     const isSubmitted = st==='submitted';
-    return `<div class="plan-card" style="border-left-color:${col}${isSubmitted?';box-shadow:0 0 0 2px #2563eb33':''}">
+    const isPendingEdit = st==='pending_edit';
+    const pendingEditBlock = isPendingEdit ? `<div class="pending-edit-block">
+      <i class="fas fa-clock"></i> <strong>${p.assignee_name||'담당자'}</strong>의 수정 요청<br>
+      ${p.pending_title&&p.pending_title!==p.title?`<span>프로그램: <del style="color:#9ca3af">${p.title}</del> → <strong>${p.pending_title}</strong></span><br>`:''}
+      ${p.pending_budget_item&&p.pending_budget_item!==p.budget_item?`<span>세목: <del style="color:#9ca3af">${p.budget_item}</del> → <strong>${p.pending_budget_item}</strong></span><br>`:''}
+      ${p.pending_budgeted_amount?`<span>예산액: <del style="color:#9ca3af">${formatMoney(budg)}</del> → <strong style="color:#ea580c">${formatMoney(+p.pending_budgeted_amount)}</strong></span>`:''}
+    </div>` : '';
+    return `<div class="plan-card" style="border-left-color:${col}${isSubmitted?';box-shadow:0 0 0 2px #2563eb33':''}${isPendingEdit?';box-shadow:0 0 0 2px #ea580c33':''}">
       <div class="pc-header">
         <span class="pc-prog">${p.title}</span>
         <div style="display:flex;gap:4px;align-items:center">
@@ -770,6 +777,7 @@ function renderPlanCards() {
           <span class="pc-dept" style="background:${col}18;color:${col}">${deptLabel[p.department]||''}</span>
         </div>
       </div>
+      ${pendingEditBlock}
       <div class="pc-row"><span>세목</span><strong>${itemLabel||'-'}</strong></div>
       <div class="pc-row"><span>예산액</span><strong>${formatMoney(budg)}</strong></div>
       <div class="pc-row"><span>집행액</span><strong style="color:${rateColor}">${formatMoney(exec)}</strong></div>
