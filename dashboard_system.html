@@ -589,7 +589,7 @@ function renderMyPlanCards() {
       </div>
       ${rejectedBlock}
       <div class="pc-row"><span>세목</span><strong>${itemLabel(p.budget_item)||'-'}</strong></div>
-      <div class="pc-row"><span>예산액</span><strong>${formatMoney(budg)}</strong></div>
+      <div class="pc-row"><span>예산액</span><strong>${isPendingEdit&&p.pending_budgeted_amount?`<del style="color:#9ca3af;font-size:11px">${formatMoney(budg)}</del> → <span style="color:#ea580c">${formatMoney(+p.pending_budgeted_amount)}</span>`:formatMoney(budg)}</strong></div>
       <div class="pc-row"><span>집행액</span><strong style="color:${rateColor}">${formatMoney(exec)}</strong></div>
       <div class="pc-row"><span>잔액</span><strong style="color:${remain<0?'#dc2626':'#059669'}">${formatMoney(remain)}</strong></div>
       <div style="margin-top:8px;display:flex;align-items:center;gap:8px">
