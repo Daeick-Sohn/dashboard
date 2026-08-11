@@ -37,6 +37,8 @@
 .plan-status.approved  { background:#ecfdf5;color:#059669; }
 .plan-status.rejected  { background:#fef2f2;color:#dc2626; }
 .rejected-comment { background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:8px 12px;margin-top:8px;font-size:12px;color:#dc2626; }
+.plan-status.pending_edit { background:#fff7ed;color:#ea580c; }
+.pending-edit-block { background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:8px 12px;margin-top:8px;font-size:12px;color:#ea580c; }
 </style>
 </head>
 <body>
@@ -552,7 +554,7 @@ function buildExecMap() {
 }
 
 function planStatusBadge(status) {
-  const map = { draft:'임시저장', submitted:'제출됨', approved:'승인됨', rejected:'반려됨' };
+  const map = { draft:'임시저장', submitted:'제출됨', approved:'승인됨', rejected:'반려됨', pending_edit:'수정 요청중' };
   return `<span class="plan-status ${status||'approved'}">${map[status]||'승인됨'}</span>`;
 }
 
@@ -883,15 +885,17 @@ async function deleteBudget(id){if(!confirm('삭제하시겠습니까?'))return;
 function openMyPlanModal(){
   document.getElementById('mpId').value='';
   document.getElementById('myPlanModalTitle').textContent='예산 계획 추가';
+  const footer = document.querySelector('#myPlanModal .modal-footer');
+  if(footer) footer.innerHTML = `
+    <button class="btn btn-outline" onclick="closeModal('myPlanModal')">취소</button>
+    <button class="btn btn-sm" style="background:#6b7280;color:white;padding:8px 18px" onclick="saveMyPlan('draft')">임시저장</button>
+    <button class="btn btn-sm" style="background:${DEPT_COLOR};color:white;padding:8px 18px" onclick="saveMyPlan('submitted')">제출하기</button>`;
   ['mpNote'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('mpBudgeted').value='';
   document.getElementById('mpYear').value=CUR_YEAR;
   document.getElementById('mpMonth').value=CUR_MONTH;
-  // bTitle과 동일한 방식으로 mpTitle 채우기
-  if(typeof populateProgramSelect!=='undefined') populateProgramSelect(DEPT,'');
-  const bTitleSel=document.getElementById('bTitle');
-  const mpTitleSel=document.getElementById('mpTitle');
-  if(bTitleSel&&mpTitleSel) mpTitleSel.innerHTML=bTitleSel.innerHTML;
+  // 프로그램 목록 직접 채우기
+  populateMpProgramSelect('');
   const sel=document.getElementById('mpBudgetItem');
   if(sel&&typeof BUDGET_ITEMS!=='undefined'){sel.innerHTML='<option value="">세목 선택</option>';BUDGET_ITEMS.forEach(item=>sel.innerHTML+=`<option value="${item.value}">${item.label}</option>`);}
   document.getElementById('mpTitleOther').style.display='none';
@@ -911,6 +915,54 @@ function populateMpProgramSelect(selected) {
   opts += '<option value="__other__">직접 입력...</option>';
   sel.innerHTML = opts;
   if(selected) sel.value = selected;
+}
+function requestEditMyPlan(id){
+  const p=allPlans.find(x=>x.id===id); if(!p)return;
+  document.getElementById('mpId').value=p.id;
+  document.getElementById('myPlanModalTitle').textContent='수정 요청 (팀장 승인 후 반영)';
+  const titleVal = p.pending_title||p.title||'';
+  populateMpProgramSelect(titleVal);
+  document.getElementById('mpTitleOther').style.display='none';
+  const sel=document.getElementById('mpBudgetItem');
+  const itemVal = p.pending_budget_item||p.budget_item||'';
+  if(sel&&typeof BUDGET_ITEMS!=='undefined'){sel.innerHTML='<option value="">세목 선택</option>';BUDGET_ITEMS.forEach(item=>sel.innerHTML+=`<option value="${item.value}" ${itemVal===item.value?'selected':''}>${item.label}</option>`);}
+  document.getElementById('mpBudgeted').value=p.pending_budgeted_amount||p.budgeted_amount||'';
+  document.getElementById('mpYear').value=p.year||CUR_YEAR;
+  document.getElementById('mpMonth').value=p.month||CUR_MONTH;
+  document.getElementById('mpNote').value=p.pending_note||p.note||'';
+  const footer = document.querySelector('#myPlanModal .modal-footer');
+  if(footer) footer.innerHTML = `
+    <button class="btn btn-outline" onclick="closeModal('myPlanModal')">취소</button>
+    <button class="btn btn-sm" style="background:#ea580c;color:white;padding:8px 18px" onclick="saveEditRequest()">수정 요청 제출</button>`;
+  document.getElementById('myPlanModal').classList.add('show');
+}
+async function saveEditRequest(){
+  const id=document.getElementById('mpId').value;
+  const titleVal=getProgramValue('mpTitle','mpTitleOther');
+  const item=document.getElementById('mpBudgetItem').value;
+  const budg=parseFloat(document.getElementById('mpBudgeted').value)||0;
+  if(!titleVal){alert('세부 프로그램을 선택하세요');return;}
+  if(!item){alert('예산 세목을 선택하세요');return;}
+  if(budg<=0){alert('예산액을 입력하세요');return;}
+  await DB.update('budget_plan',id,{
+    status:'pending_edit',
+    pending_title:titleVal,
+    pending_budget_item:item,
+    pending_budgeted_amount:budg,
+    pending_note:document.getElementById('mpNote').value,
+    pending_requested_at:new Date().toISOString()
+  });
+  closeModal('myPlanModal'); await loadAll();
+  showToast('수정 요청이 제출되었습니다. 팀장 승인을 기다립니다.','success');
+}
+async function cancelEditRequest(id){
+  if(!confirm('수정 요청을 취소하시겠습니까?'))return;
+  await DB.update('budget_plan',id,{
+    status:'approved',
+    pending_title:null, pending_budget_item:null,
+    pending_budgeted_amount:null, pending_note:null, pending_requested_at:null
+  });
+  await loadAll(); showToast('수정 요청이 취소되었습니다.','success');
 }
 function editMyPlan(id){
   const p=allPlans.find(x=>x.id===id); if(!p)return;
@@ -953,8 +1005,8 @@ async function submitMyPlan(id){
 }
 
 // ── 과제 CRUD ──
-function openTaskModal(){document.getElementById('taskId').value='';['tDesc','tNote'].forEach(id=>document.getElementById(id).value='');document.getElementById('tYear').value=CUR_YEAR;document.getElementById('tMonth').value=CUR_MONTH;document.getElementById('tStartDate').value=getToday();document.getElementById('tDueDate').value='';document.getElementById('taskModalTitle').textContent='과제 추가';if(typeof populateTaskProgramSelect!=='undefined')populateTaskProgramSelect(DEPT,'');document.getElementById('taskModal').classList.add('show');}
-function editTask(id){const t=allTasks.find(x=>x.id===id);if(!t)return;document.getElementById('taskId').value=t.id;document.getElementById('taskModalTitle').textContent='과제 수정';if(typeof populateTaskProgramSelect!=='undefined')populateTaskProgramSelect(DEPT,t.title||'');document.getElementById('tDesc').value=t.description||'';document.getElementById('tPriority').value=t.priority||'medium';document.getElementById('tStatus').value=t.status||'todo';document.getElementById('tStartDate').value=t.start_date||'';document.getElementById('tDueDate').value=t.due_date||'';document.getElementById('tYear').value=t.year||CUR_YEAR;document.getElementById('tMonth').value=t.month||CUR_MONTH;document.getElementById('tNote').value=t.note||'';document.getElementById('taskModal').classList.add('show');}
+function openTaskModal(){document.getElementById('taskId').value='';['tDesc','tNote'].forEach(id=>document.getElementById(id).value='');document.getElementById('tYear').value=CUR_YEAR;document.getElementById('tMonth').value=CUR_MONTH;document.getElementById('tStartDate').value=getToday();document.getElementById('tDueDate').value='';document.getElementById('taskModalTitle').textContent='과제 추가';if(typeof populateProgramSelect!=='undefined')populateProgramSelect(DEPT,'');document.getElementById('taskModal').classList.add('show');}
+function editTask(id){const t=allTasks.find(x=>x.id===id);if(!t)return;document.getElementById('taskId').value=t.id;document.getElementById('taskModalTitle').textContent='과제 수정';if(typeof populateProgramSelect!=='undefined')populateProgramSelect(DEPT,t.title||'');document.getElementById('tDesc').value=t.description||'';document.getElementById('tPriority').value=t.priority||'medium';document.getElementById('tStatus').value=t.status||'todo';document.getElementById('tStartDate').value=t.start_date||'';document.getElementById('tDueDate').value=t.due_date||'';document.getElementById('tYear').value=t.year||CUR_YEAR;document.getElementById('tMonth').value=t.month||CUR_MONTH;document.getElementById('tNote').value=t.note||'';document.getElementById('taskModal').classList.add('show');}
 async function saveTask(){const id=document.getElementById('taskId').value;const yr=parseInt(document.getElementById('tYear').value)||CUR_YEAR;const mo=parseInt(document.getElementById('tMonth').value)||CUR_MONTH;const titleVal=getProgramValue('tTitle','tTitleOther');const data={department:DEPT,title:titleVal,description:document.getElementById('tDesc').value,assignee_id:user.id,assignee_name:user.name,priority:document.getElementById('tPriority').value,status:document.getElementById('tStatus').value,start_date:document.getElementById('tStartDate').value,due_date:document.getElementById('tDueDate').value,year:yr,month:mo,quarter:getQuarter(mo),note:document.getElementById('tNote').value};if(!data.title){alert('과제(프로그램)을 선택하세요');return;}if(id)await DB.update('tasks',id,data);else await DB.create('tasks',data);closeModal('taskModal');await loadAll();showToast('저장되었습니다','success');}
 async function deleteTask(id){if(!confirm('삭제하시겠습니까?'))return;await DB.remove('tasks',id);await loadAll();showToast('삭제되었습니다');}
 
