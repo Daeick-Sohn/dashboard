@@ -578,8 +578,9 @@ function renderMyPlanCards() {
     const rate=budg>0?Math.min(Math.round(exec/budg*100),999):0;
     const rateColor=rate>=90?'#dc2626':rate>=70?'#d97706':'#059669';
     const st = p.status||'approved';
+    const isPendingEdit = st==='pending_edit';
     const canEdit = (st==='draft'||st==='submitted'||st==='rejected');
-    const canExec = (st==='approved');
+    const canExec = (st==='approved'||st==='pending_edit');
     const rejectedBlock = (st==='rejected'&&p.manager_comment)
       ? `<div class="rejected-comment"><i class="fas fa-comment-alt"></i> 반려 사유: ${p.manager_comment}</div>` : '';
     return `<div class="plan-card">
