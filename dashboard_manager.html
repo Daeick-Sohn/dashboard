@@ -55,14 +55,6 @@ cursor:pointer; border:2px solid; transition:all 0.2s; background:white; font-fa
 .plan-status.pending_edit { background:#fff7ed;color:#ea580c; }
 .pending-edit-block { background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 14px;margin-top:8px;font-size:12px;color:#ea580c; }
 
-
-/* 정렬 헤더 */
-.sort-th { cursor:pointer; user-select:none; white-space:nowrap; }
-.sort-th:hover { background:rgba(0,0,0,0.04); }
-.sort-th .sort-icon { font-size:10px; margin-left:4px; color:#9ca3af; }
-.sort-th.asc .sort-icon::after { content:'▲'; color:#2563eb; }
-.sort-th.desc .sort-icon::after { content:'▼'; color:#2563eb; }
-.sort-th:not(.asc):not(.desc) .sort-icon::after { content:'⇅'; }
 @media(max-width:900px){ .grid-2,.grid-3{ grid-template-columns:1fr; } }
 @media(max-width:768px){ .dept-tab{ padding:6px 12px; font-size:12px; } }
 </style>
@@ -240,7 +232,7 @@ cursor:pointer; border:2px solid; transition:all 0.2s; background:white; font-fa
         <select id="planAssigneeFilter" onchange="renderPlanCards()">
           <option value="">전체 담당자</option>
           <option value="staff01">최진아</option>
-          <option value="staff02">이재인</option>
+          <option value="staff02">이명옥</option>
           <option value="res01">김자영</option>
           <option value="res02">이진우</option>
           <option value="res03">김진국</option>
@@ -283,18 +275,11 @@ cursor:pointer; border:2px solid; transition:all 0.2s; background:white; font-fa
       <div style="overflow-x:auto">
         <table class="data-table">
           <thead>
-            <tr id="budgetSortHeader">
-              <th class="sort-th" onclick="setBudgetSort('dept')">업무<span class="sort-icon"></span></th>
-              <th class="sort-th" onclick="setBudgetSort('title')">세부프로그램<span class="sort-icon"></span></th>
-              <th class="sort-th" onclick="setBudgetSort('item')">예산 세목<span class="sort-icon"></span></th>
-              <th class="sort-th" style="text-align:right" onclick="setBudgetSort('budgeted')">예산액<span class="sort-icon"></span></th>
-              <th class="sort-th" style="text-align:right" onclick="setBudgetSort('executed')">집행액<span class="sort-icon"></span></th>
-              <th class="sort-th" style="text-align:right" onclick="setBudgetSort('cumExec')">누계<span class="sort-icon"></span></th>
-              <th class="sort-th" style="text-align:right" onclick="setBudgetSort('remain')">잔액<span class="sort-icon"></span></th>
-              <th class="sort-th" onclick="setBudgetSort('rate')">집행률<span class="sort-icon"></span></th>
-              <th class="sort-th" onclick="setBudgetSort('date')">집행일<span class="sort-icon"></span></th>
-              <th class="sort-th" onclick="setBudgetSort('assignee')">담당자<span class="sort-icon"></span></th>
-              <th>관리</th>
+            <tr>
+              <th>업무</th><th>세부프로그램</th><th>예산 세목</th>
+              <th style="text-align:right">예산액</th><th style="text-align:right">집행액</th>
+              <th style="text-align:right">누계</th><th style="text-align:right">잔액</th>
+              <th>집행률</th><th>집행일</th><th>담당자</th><th>관리</th>
             </tr>
           </thead>
           <tbody id="budgetTableBody"></tbody>
@@ -575,14 +560,13 @@ const user = requireAuth(['manager']);
 if(user) document.getElementById('sideUserName').textContent = user.name;
 
 let allTasks=[], allBudget=[], allEvals=[], allNotices=[], allPlans=[];
-let currentDept='all'
-let budgetSortKey='', budgetSortDir=1;, currentView='monthly', currentYear=CUR_YEAR, currentPeriod=CUR_MONTH;
+let currentDept='all', currentView='monthly', currentYear=CUR_YEAR, currentPeriod=CUR_MONTH;
 let currentBudgetTab='plan';
 let taskChart=null, budgetChart=null;
 
 const MEMBERS = [
   { id:'staff01', name:'최진아', dept:'system' },
-  { id:'staff02', name:'이재인', dept:'rc' },
+  { id:'staff02', name:'이명옥', dept:'rc' },
   { id:'res01', name:'김자영', dept:'communication' },
   { id:'res02', name:'이진우', dept:'communication' },
   { id:'res03', name:'김진국', dept:'communication' },
@@ -1106,16 +1090,7 @@ function renderBudget() {
   const tbody = document.getElementById('budgetTableBody');
   if(!budget.length){ tbody.innerHTML=`<tr><td colspan="11"><div class="empty-state"><i class="fas fa-inbox"></i><p>집행 내역이 없습니다</p></div></td></tr>`; return; }
 
-  if(!budgetSortKey) budget.sort((a,b)=>{ const ta=a.title||'',tb=b.title||''; if(ta<tb)return -1;if(ta>tb)return 1; const da=a.execution_date||a.created_at||''; const db=b.execution_date||b.created_at||''; return da<db?-1:da>db?1:0; });
-
-  // planBudg 맵 생성 (정렬용)
-  const planBudgMap = new Map();
-  budget.forEach(b=>{
-    const bItem2=b.budget_item||b.category||'';
-    const p2=b.plan_id?allPlans.find(p=>p.id===b.plan_id):allPlans.find(p=>p.title===b.title&&p.budget_item===bItem2&&p.department===b.department);
-    planBudgMap.set(b.id, p2?+p2.budgeted_amount||0:+b.budgeted_amount||0);
-  });
-  budget = sortBudgetRows(budget, progRunningMap, planBudgMap);
+  budget.sort((a,b)=>{ const ta=a.title||'',tb=b.title||''; if(ta<tb)return -1;if(ta>tb)return 1; const da=a.execution_date||a.created_at||''; const db=b.execution_date||b.created_at||''; return da<db?-1:da>db?1:0; });
 
   tbody.innerHTML = budget.map(b=>{
     const bItem = b.budget_item||b.category||'';
@@ -1462,47 +1437,6 @@ function onBudgetProgramChange() {
     summaryEl.style.display='block';
     summaryEl.innerHTML=`<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:12px"><span>📌 <strong>${progName}</strong></span><span>예산: <strong>${formatMoney(+plan.budgeted_amount||0)}</strong></span><span>기집행: <strong style="color:${color}">${formatMoney(execSum)}</strong></span><span>잔액: <strong style="color:${remain<0?'#dc2626':'#059669'}">${formatMoney(remain)}</strong></span><span>집행률: <strong style="color:${color}">${rate}%</strong></span></div>`;
   } else { summaryEl.style.display='none'; }
-}
-
-// ── 집행 내역 정렬 ──
-function setBudgetSort(key) {
-  if(budgetSortKey === key) {
-    budgetSortDir *= -1;
-  } else {
-    budgetSortKey = key;
-    budgetSortDir = 1;
-  }
-  // 헤더 클래스 업데이트
-  document.querySelectorAll('#budgetSortHeader .sort-th').forEach(th => {
-    th.classList.remove('asc','desc');
-    if(th.getAttribute('onclick') === `setBudgetSort('${key}')`) {
-      th.classList.add(budgetSortDir===1?'asc':'desc');
-    }
-  });
-  renderBudget();
-}
-function sortBudgetRows(rows, runningMap, planMap) {
-  if(!budgetSortKey) return rows;
-  return [...rows].sort((a,b) => {
-    let va, vb;
-    const ra = runningMap.get(a.id)||{};
-    const rb = runningMap.get(b.id)||{};
-    switch(budgetSortKey) {
-      case 'dept':     va=a.department||''; vb=b.department||''; break;
-      case 'title':    va=a.title||''; vb=b.title||''; break;
-      case 'item':     va=a.budget_item||a.category||''; vb=b.budget_item||b.category||''; break;
-      case 'budgeted': va=planMap.get(a.id)||0; vb=planMap.get(b.id)||0; break;
-      case 'executed': va=+a.executed_amount||0; vb=+b.executed_amount||0; break;
-      case 'cumExec':  va=ra.cumExec||0; vb=rb.cumExec||0; break;
-      case 'remain':   va=ra.remain||0; vb=rb.remain||0; break;
-      case 'rate':     va=ra.rate||0; vb=rb.rate||0; break;
-      case 'date':     va=a.execution_date||''; vb=b.execution_date||''; break;
-      case 'assignee': va=a.assignee_name||''; vb=b.assignee_name||''; break;
-      default: return 0;
-    }
-    if(typeof va === 'number') return (va-vb)*budgetSortDir;
-    return va.localeCompare(vb)*budgetSortDir;
-  });
 }
 
 function closeModal(id){ document.getElementById(id).classList.remove('show'); }
