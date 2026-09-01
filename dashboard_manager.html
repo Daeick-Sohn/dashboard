@@ -57,6 +57,13 @@ cursor:pointer; border:2px solid; transition:all 0.2s; background:white; font-fa
 
 @media(max-width:900px){ .grid-2,.grid-3{ grid-template-columns:1fr; } }
 @media(max-width:768px){ .dept-tab{ padding:6px 12px; font-size:12px; } }
+
+/* 정렬 헤더 */
+.sort-th { cursor:pointer; user-select:none; white-space:nowrap; }
+.sort-th:hover { background:rgba(0,0,0,0.04); }
+.sort-icon { font-size:10px; margin-left:3px; color:#9ca3af; }
+.sort-th.asc .sort-icon { color:#2563eb; }
+.sort-th.desc .sort-icon { color:#2563eb; }
 </style>
 </head>
 <body>
@@ -274,12 +281,19 @@ cursor:pointer; border:2px solid; transition:all 0.2s; background:white; font-fa
       </div>
       <div style="overflow-x:auto">
         <table class="data-table">
-          <thead>
+          <thead id="budgetThead">
             <tr>
-              <th>업무</th><th>세부프로그램</th><th>예산 세목</th>
-              <th style="text-align:right">예산액</th><th style="text-align:right">집행액</th>
-              <th style="text-align:right">누계</th><th style="text-align:right">잔액</th>
-              <th>집행률</th><th>집행일</th><th>담당자</th><th>관리</th>
+              <th class="sort-th" onclick="setBudgetSort('dept')">업무<span id="si-dept" class="sort-icon">⇅</span></th>
+              <th class="sort-th" onclick="setBudgetSort('title')">세부프로그램<span id="si-title" class="sort-icon">⇅</span></th>
+              <th class="sort-th" onclick="setBudgetSort('item')">예산 세목<span id="si-item" class="sort-icon">⇅</span></th>
+              <th class="sort-th" style="text-align:right" onclick="setBudgetSort('budgeted')">예산액<span id="si-budgeted" class="sort-icon">⇅</span></th>
+              <th class="sort-th" style="text-align:right" onclick="setBudgetSort('executed')">집행액<span id="si-executed" class="sort-icon">⇅</span></th>
+              <th class="sort-th" style="text-align:right" onclick="setBudgetSort('cumExec')">누계<span id="si-cumExec" class="sort-icon">⇅</span></th>
+              <th class="sort-th" style="text-align:right" onclick="setBudgetSort('remain')">잔액<span id="si-remain" class="sort-icon">⇅</span></th>
+              <th class="sort-th" onclick="setBudgetSort('rate')">집행률<span id="si-rate" class="sort-icon">⇅</span></th>
+              <th class="sort-th" onclick="setBudgetSort('date')">집행일<span id="si-date" class="sort-icon">⇅</span></th>
+              <th class="sort-th" onclick="setBudgetSort('assignee')">담당자<span id="si-assignee" class="sort-icon">⇅</span></th>
+              <th>관리</th>
             </tr>
           </thead>
           <tbody id="budgetTableBody"></tbody>
@@ -1050,6 +1064,10 @@ async function rejectPlan() {
   showToast('반려 처리되었습니다.', 'success');
 }
 
+// ── 집행 내역 정렬 상태 ──
+let budgetSortKey = '';
+let budgetSortDir = 1;
+
 // ── 집행 내역 ──
 function populateBudgetProgramFilter() {
   const sel = document.getElementById('budgetProgramFilter'); if(!sel) return;
@@ -1090,7 +1108,50 @@ function renderBudget() {
   const tbody = document.getElementById('budgetTableBody');
   if(!budget.length){ tbody.innerHTML=`<tr><td colspan="11"><div class="empty-state"><i class="fas fa-inbox"></i><p>집행 내역이 없습니다</p></div></td></tr>`; return; }
 
-  budget.sort((a,b)=>{ const ta=a.title||'',tb=b.title||''; if(ta<tb)return -1;if(ta>tb)return 1; const da=a.execution_date||a.created_at||''; const db=b.execution_date||b.created_at||''; return da<db?-1:da>db?1:0; });
+  // 기본 정렬 또는 커스텀 정렬
+  if(!budgetSortKey) {
+    budget.sort((a,b)=>{ const ta=a.title||'',tb=b.title||''; if(ta<tb)return -1;if(ta>tb)return 1; const da=a.execution_date||a.created_at||''; const db=b.execution_date||b.created_at||''; return da<db?-1:da>db?1:0; });
+  }
+
+  // 정렬 아이콘 업데이트
+  ['dept','title','item','budgeted','executed','cumExec','remain','rate','date','assignee'].forEach(k=>{
+    const el=document.getElementById('si-'+k);
+    if(!el)return;
+    if(budgetSortKey!==k){el.textContent='⇅';el.style.color='#9ca3af';}
+    else{el.textContent=budgetSortDir===1?'▲':'▼';el.style.color='#2563eb';}
+  });
+
+  // planBudg 맵 생성
+  const planBudgMap = new Map();
+  budget.forEach(b=>{
+    const bi=b.budget_item||b.category||'';
+    const pl=b.plan_id?allPlans.find(p=>p.id===b.plan_id):allPlans.find(p=>p.title===b.title&&p.budget_item===bi&&p.department===b.department);
+    planBudgMap.set(b.id, pl?+pl.budgeted_amount||0:+b.budgeted_amount||0);
+  });
+
+  // 커스텀 정렬 적용
+  if(budgetSortKey) {
+    budget.sort((a,bx)=>{
+      let va,vb;
+      const ra=progRunningMap.get(a.id)||{};
+      const rb=progRunningMap.get(bx.id)||{};
+      switch(budgetSortKey){
+        case 'dept':     va=a.department||'';vb=bx.department||'';break;
+        case 'title':    va=a.title||'';vb=bx.title||'';break;
+        case 'item':     va=a.budget_item||a.category||'';vb=bx.budget_item||bx.category||'';break;
+        case 'budgeted': va=planBudgMap.get(a.id)||0;vb=planBudgMap.get(bx.id)||0;break;
+        case 'executed': va=+a.executed_amount||0;vb=+bx.executed_amount||0;break;
+        case 'cumExec':  va=ra.cumExec||0;vb=rb.cumExec||0;break;
+        case 'remain':   va=ra.remain||0;vb=rb.remain||0;break;
+        case 'rate':     va=ra.rate||0;vb=rb.rate||0;break;
+        case 'date':     va=a.execution_date||'';vb=bx.execution_date||'';break;
+        case 'assignee': va=a.assignee_name||'';vb=bx.assignee_name||'';break;
+        default: return 0;
+      }
+      if(typeof va==='number') return (va-vb)*budgetSortDir;
+      return va.localeCompare(vb)*budgetSortDir;
+    });
+  }
 
   tbody.innerHTML = budget.map(b=>{
     const bItem = b.budget_item||b.category||'';
@@ -1437,6 +1498,23 @@ function onBudgetProgramChange() {
     summaryEl.style.display='block';
     summaryEl.innerHTML=`<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:12px"><span>📌 <strong>${progName}</strong></span><span>예산: <strong>${formatMoney(+plan.budgeted_amount||0)}</strong></span><span>기집행: <strong style="color:${color}">${formatMoney(execSum)}</strong></span><span>잔액: <strong style="color:${remain<0?'#dc2626':'#059669'}">${formatMoney(remain)}</strong></span><span>집행률: <strong style="color:${color}">${rate}%</strong></span></div>`;
   } else { summaryEl.style.display='none'; }
+}
+
+function setBudgetSort(key) {
+  if(budgetSortKey === key) {
+    budgetSortDir *= -1;
+  } else {
+    budgetSortKey = key;
+    budgetSortDir = 1;
+  }
+  renderBudget();
+}
+
+function getBudgetSortIcon(key) {
+  if(budgetSortKey !== key) return '<span class="sort-icon">⇅</span>';
+  return budgetSortDir === 1
+    ? '<span class="sort-icon">▲</span>'
+    : '<span class="sort-icon">▼</span>';
 }
 
 function closeModal(id){ document.getElementById(id).classList.remove('show'); }
