@@ -29,14 +29,6 @@
 .budget-sub-tab { padding:10px 20px;font-size:14px;font-weight:500;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;color:#6b7280;font-family:'Noto Sans KR',sans-serif; }
 .budget-sub-tab.active { border-bottom-color:#059669;color:#059669;font-weight:700; }
 
-
-/* 정렬 헤더 */
-.sort-th { cursor:pointer; user-select:none; white-space:nowrap; }
-.sort-th:hover { background:rgba(0,0,0,0.04); }
-.sort-th .sort-icon { font-size:10px; margin-left:4px; color:#9ca3af; }
-.sort-th.asc .sort-icon::after { content:'▲'; color:#2563eb; }
-.sort-th.desc .sort-icon::after { content:'▼'; color:#2563eb; }
-.sort-th:not(.asc):not(.desc) .sort-icon::after { content:'⇅'; }
 @media(max-width:768px){ .plan-grid{ grid-template-columns:1fr; } }
 /* 예산 계획 상태 뱃지 */
 .plan-status { display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700; }
@@ -103,7 +95,7 @@
 
 <!-- 내 현황 -->
 <div id="tab-overview" class="section active">
-  <!-- rc: 단일 담당자(이재인/staff02) -->
+  <!-- rc: 단일 담당자(이명옥/staff02) -->
   <div class="stat-grid" id="statGrid"></div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
     <div class="card">
@@ -198,17 +190,7 @@
         </div>
       </div>
       <div style="overflow-x:auto"><table class="data-table">
-        <thead><tr id="budgetSortHeader">
-          <th class="sort-th" onclick="setBudgetSort('title')">프로그램<span class="sort-icon"></span></th>
-          <th class="sort-th" onclick="setBudgetSort('item')">세목<span class="sort-icon"></span></th>
-          <th class="sort-th" style="text-align:right" onclick="setBudgetSort('budgeted')">예산액<span class="sort-icon"></span></th>
-          <th class="sort-th" style="text-align:right" onclick="setBudgetSort('executed')">집행액<span class="sort-icon"></span></th>
-          <th class="sort-th" style="text-align:right" onclick="setBudgetSort('cumExec')">누계<span class="sort-icon"></span></th>
-          <th class="sort-th" style="text-align:right" onclick="setBudgetSort('remain')">잔액<span class="sort-icon"></span></th>
-          <th class="sort-th" onclick="setBudgetSort('rate')">집행률<span class="sort-icon"></span></th>
-          <th class="sort-th" onclick="setBudgetSort('date')">집행일<span class="sort-icon"></span></th>
-          <th>비고</th><th>관리</th>
-        </tr></thead>
+        <thead><tr><th>프로그램</th><th>세목</th><th style="text-align:right">예산액</th><th style="text-align:right">집행액</th><th style="text-align:right">누계</th><th style="text-align:right">잔액</th><th>집행률</th><th>집행일</th><th>비고</th><th>관리</th></tr></thead>
         <tbody id="budgetTableBody"></tbody>
       </table></div>
     </div>
@@ -457,8 +439,7 @@ if(user) {
 }
 
 let allTasks=[], allBudget=[], allEvals=[], allNotices=[], allPrograms=[], allPlans=[];
-let currentView='monthly'
-let budgetSortKey='', budgetSortDir=1;, currentYear=CUR_YEAR, currentPeriod=CUR_MONTH;
+let currentView='monthly', currentYear=CUR_YEAR, currentPeriod=CUR_MONTH;
 let currentBudgetTab='plan';
 let taskChartInst=null;
 
@@ -735,15 +716,7 @@ function renderBudget(){
 
   const tbody=document.getElementById('budgetTableBody');
   if(!budget.length){tbody.innerHTML=`<tr><td colspan="10"><div class="empty-state"><i class="fas fa-inbox"></i><p>집행 내역이 없습니다</p></div></td></tr>`;return;}
-  if(!budgetSortKey) budget.sort((a,b)=>{ const ta=a.title||'',tb=b.title||''; if(ta<tb)return -1;if(ta>tb)return 1; const da=a.execution_date||a.created_at||''; const db=b.execution_date||b.created_at||''; return da<db?-1:da>db?1:0; });
-
-  const planBudgMap = new Map();
-  budget.forEach(b=>{
-    const bItem2=b.budget_item||b.category||'';
-    const p2=b.plan_id?allPlans.find(p=>p.id===b.plan_id):allPlans.find(p=>p.title===b.title&&p.budget_item===bItem2);
-    planBudgMap.set(b.id, p2?+p2.budgeted_amount||0:+b.budgeted_amount||0);
-  });
-  budget = sortBudgetRows(budget, progRunningMap, planBudgMap);
+  budget.sort((a,b)=>{ const ta=a.title||'',tb=b.title||''; if(ta<tb)return -1;if(ta>tb)return 1; const da=a.execution_date||a.created_at||''; const db=b.execution_date||b.created_at||''; return da<db?-1:da>db?1:0; });
   tbody.innerHTML=budget.map(b=>{
     const bItem=b.budget_item||b.category||'';
     const plan=b.plan_id
@@ -1077,47 +1050,6 @@ function getProgramValue(selId, otherId) {
   if(!sel) return '';
   return sel.value === '__other__' ? (other?other.value.trim():'') : sel.value;
 }
-// ── 집행 내역 정렬 ──
-function setBudgetSort(key) {
-  if(budgetSortKey === key) {
-    budgetSortDir *= -1;
-  } else {
-    budgetSortKey = key;
-    budgetSortDir = 1;
-  }
-  // 헤더 클래스 업데이트
-  document.querySelectorAll('#budgetSortHeader .sort-th').forEach(th => {
-    th.classList.remove('asc','desc');
-    if(th.getAttribute('onclick') === `setBudgetSort('${key}')`) {
-      th.classList.add(budgetSortDir===1?'asc':'desc');
-    }
-  });
-  renderBudget();
-}
-function sortBudgetRows(rows, runningMap, planMap) {
-  if(!budgetSortKey) return rows;
-  return [...rows].sort((a,b) => {
-    let va, vb;
-    const ra = runningMap.get(a.id)||{};
-    const rb = runningMap.get(b.id)||{};
-    switch(budgetSortKey) {
-      case 'dept':     va=a.department||''; vb=b.department||''; break;
-      case 'title':    va=a.title||''; vb=b.title||''; break;
-      case 'item':     va=a.budget_item||a.category||''; vb=b.budget_item||b.category||''; break;
-      case 'budgeted': va=planMap.get(a.id)||0; vb=planMap.get(b.id)||0; break;
-      case 'executed': va=+a.executed_amount||0; vb=+b.executed_amount||0; break;
-      case 'cumExec':  va=ra.cumExec||0; vb=rb.cumExec||0; break;
-      case 'remain':   va=ra.remain||0; vb=rb.remain||0; break;
-      case 'rate':     va=ra.rate||0; vb=rb.rate||0; break;
-      case 'date':     va=a.execution_date||''; vb=b.execution_date||''; break;
-      case 'assignee': va=a.assignee_name||''; vb=b.assignee_name||''; break;
-      default: return 0;
-    }
-    if(typeof va === 'number') return (va-vb)*budgetSortDir;
-    return va.localeCompare(vb)*budgetSortDir;
-  });
-}
-
 function closeModal(id){document.getElementById(id).classList.remove('show');}
 function showToast(msg,type=''){const el=document.getElementById('toast');document.getElementById('toastMsg').textContent=msg;el.className='toast show'+(type?' '+type:'');setTimeout(()=>el.classList.remove('show'),2500);}
 function copyMyLink(){const token=(user&&user.token)?user.token:'';if(!token){showToast('링크 정보를 찾을 수 없습니다','error');return;}const base=location.origin+location.pathname.replace('dashboard_rc.html','');const url=`${base}dashboard_rc.html?key=${token}`;navigator.clipboard.writeText(url).then(()=>showToast('내 접근 링크가 복사되었습니다','success'));}
