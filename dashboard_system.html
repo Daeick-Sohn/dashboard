@@ -736,15 +736,20 @@ function renderBudgetItemTable(){
   const allFiltered=getFiltered(allBudget);
   // plan 기준 예산액
   const g={};BUDGET_ITEMS.forEach(item=>g[item.value]={b:0,e:0});
-  const addedPairs=new Set();
+  // plan 기준으로 예산액 집계 (중복 방지: plan_id 또는 title+budget_item 조합)
+  const addedPlanIds=new Set();
   allFiltered.forEach(b=>{
     const key=b.budget_item||b.category||'기타';
     if(!g[key])g[key]={b:0,e:0};
-    const plan=allPlans.find(p=>p.title===b.title&&p.budget_item===key);
-    const pKey=(b.title||'')+'|'+key;
-    if(!addedPairs.has(pKey)){
-      addedPairs.add(pKey);
-      g[key].b+=plan?+plan.budgeted_amount||0:+b.budgeted_amount||0;
+    // 예산액: plan_id 기준으로 중복 없이 합산
+    const plan=b.plan_id
+      ? allPlans.find(p=>p.id===b.plan_id)
+      : allPlans.find(p=>p.title===b.title&&p.budget_item===key);
+    if(plan&&!addedPlanIds.has(plan.id)){
+      addedPlanIds.add(plan.id);
+      g[key].b+=+plan.budgeted_amount||0;
+    } else if(!plan) {
+      g[key].b+=+b.budgeted_amount||0;
     }
     g[key].e+=+b.executed_amount||0;
   });
