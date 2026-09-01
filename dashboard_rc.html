@@ -39,6 +39,13 @@
 .rejected-comment { background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:8px 12px;margin-top:8px;font-size:12px;color:#dc2626; }
 .plan-status.pending_edit { background:#fff7ed;color:#ea580c; }
 .pending-edit-block { background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:8px 12px;margin-top:8px;font-size:12px;color:#ea580c; }
+
+/* 정렬 헤더 */
+.sort-th { cursor:pointer; user-select:none; white-space:nowrap; }
+.sort-th:hover { background:rgba(0,0,0,0.04); }
+.sort-icon { font-size:10px; margin-left:3px; color:#9ca3af; }
+.sort-th.asc .sort-icon { color:#2563eb; }
+.sort-th.desc .sort-icon { color:#2563eb; }
 </style>
 </head>
 <body>
@@ -190,7 +197,17 @@
         </div>
       </div>
       <div style="overflow-x:auto"><table class="data-table">
-        <thead><tr><th>프로그램</th><th>세목</th><th style="text-align:right">예산액</th><th style="text-align:right">집행액</th><th style="text-align:right">누계</th><th style="text-align:right">잔액</th><th>집행률</th><th>집행일</th><th>비고</th><th>관리</th></tr></thead>
+        <thead id="budgetThead"><tr>
+          <th class="sort-th" onclick="setBudgetSort('title')">프로그램<span id="si-title" class="sort-icon">⇅</span></th>
+          <th class="sort-th" onclick="setBudgetSort('item')">세목<span id="si-item" class="sort-icon">⇅</span></th>
+          <th class="sort-th" style="text-align:right" onclick="setBudgetSort('budgeted')">예산액<span id="si-budgeted" class="sort-icon">⇅</span></th>
+          <th class="sort-th" style="text-align:right" onclick="setBudgetSort('executed')">집행액<span id="si-executed" class="sort-icon">⇅</span></th>
+          <th class="sort-th" style="text-align:right" onclick="setBudgetSort('cumExec')">누계<span id="si-cumExec" class="sort-icon">⇅</span></th>
+          <th class="sort-th" style="text-align:right" onclick="setBudgetSort('remain')">잔액<span id="si-remain" class="sort-icon">⇅</span></th>
+          <th class="sort-th" onclick="setBudgetSort('rate')">집행률<span id="si-rate" class="sort-icon">⇅</span></th>
+          <th class="sort-th" onclick="setBudgetSort('date')">집행일<span id="si-date" class="sort-icon">⇅</span></th>
+          <th>비고</th><th>관리</th>
+        </tr></thead>
         <tbody id="budgetTableBody"></tbody>
       </table></div>
     </div>
@@ -675,6 +692,10 @@ function renderTasks(){
   tbody.innerHTML=tasks.length?tasks.map(t=>`<tr><td><strong style="font-size:13px">${t.title}</strong>${t.description?`<div style="font-size:11px;color:#9ca3af;margin-top:1px">${t.description.substring(0,40)}...</div>`:''}</td><td>${badge(PRIORITY_MAP,t.priority)}</td><td>${badge(STATUS_MAP,t.status)}</td><td style="font-size:12px">${formatDate(t.start_date)}</td><td style="font-size:12px">${formatDate(t.due_date)}</td><td style="font-size:12px;color:#6b7280">${t.year||''}년 ${t.month||''}월</td><td style="font-size:11px;color:#9ca3af">${t.note||''}</td><td><button class="btn btn-outline btn-sm" onclick="editTask('${t.id}')"><i class="fas fa-edit"></i></button><button class="btn btn-danger btn-sm" onclick="deleteTask('${t.id}')"><i class="fas fa-trash"></i></button></td></tr>`).join(''):`<tr><td colspan="8"><div class="empty-state"><i class="fas fa-inbox"></i><p>등록된 과제가 없습니다</p></div></td></tr>`;
 }
 
+// ── 집행 내역 정렬 상태 ──
+let budgetSortKey = '';
+let budgetSortDir = 1;
+
 // ── 집행 내역 ──
 function populateProgramSelects(){
   const taskSel=document.getElementById('tProgramId');
@@ -716,7 +737,46 @@ function renderBudget(){
 
   const tbody=document.getElementById('budgetTableBody');
   if(!budget.length){tbody.innerHTML=`<tr><td colspan="10"><div class="empty-state"><i class="fas fa-inbox"></i><p>집행 내역이 없습니다</p></div></td></tr>`;return;}
-  budget.sort((a,b)=>{ const ta=a.title||'',tb=b.title||''; if(ta<tb)return -1;if(ta>tb)return 1; const da=a.execution_date||a.created_at||''; const db=b.execution_date||b.created_at||''; return da<db?-1:da>db?1:0; });
+  if(!budgetSortKey) {
+    budget.sort((a,b)=>{ const ta=a.title||'',tb=b.title||''; if(ta<tb)return -1;if(ta>tb)return 1; const da=a.execution_date||a.created_at||''; const db=b.execution_date||b.created_at||''; return da<db?-1:da>db?1:0; });
+  }
+
+  // 정렬 아이콘 업데이트
+  ['title','item','budgeted','executed','cumExec','remain','rate','date'].forEach(k=>{
+    const el=document.getElementById('si-'+k);
+    if(!el)return;
+    if(budgetSortKey!==k){el.textContent='⇅';el.style.color='#9ca3af';}
+    else{el.textContent=budgetSortDir===1?'▲':'▼';el.style.color='#2563eb';}
+  });
+
+  // planBudg 맵
+  const planBudgMap = new Map();
+  budget.forEach(b=>{
+    const bi=b.budget_item||b.category||'';
+    const pl=b.plan_id?allPlans.find(p=>p.id===b.plan_id):allPlans.find(p=>p.title===b.title&&p.budget_item===bi);
+    planBudgMap.set(b.id, pl?+pl.budgeted_amount||0:+b.budgeted_amount||0);
+  });
+
+  if(budgetSortKey) {
+    budget.sort((a,bx)=>{
+      let va,vb;
+      const ra=progRunningMap.get(a.id)||{};
+      const rb=progRunningMap.get(bx.id)||{};
+      switch(budgetSortKey){
+        case 'title':    va=a.title||'';vb=bx.title||'';break;
+        case 'item':     va=a.budget_item||a.category||'';vb=bx.budget_item||bx.category||'';break;
+        case 'budgeted': va=planBudgMap.get(a.id)||0;vb=planBudgMap.get(bx.id)||0;break;
+        case 'executed': va=+a.executed_amount||0;vb=+bx.executed_amount||0;break;
+        case 'cumExec':  va=ra.cumExec||0;vb=rb.cumExec||0;break;
+        case 'remain':   va=ra.remain||0;vb=rb.remain||0;break;
+        case 'rate':     va=ra.rate||0;vb=rb.rate||0;break;
+        case 'date':     va=a.execution_date||'';vb=bx.execution_date||'';break;
+        default: return 0;
+      }
+      if(typeof va==='number') return (va-vb)*budgetSortDir;
+      return va.localeCompare(vb)*budgetSortDir;
+    });
+  }
   tbody.innerHTML=budget.map(b=>{
     const bItem=b.budget_item||b.category||'';
     const plan=b.plan_id
@@ -1050,6 +1110,23 @@ function getProgramValue(selId, otherId) {
   if(!sel) return '';
   return sel.value === '__other__' ? (other?other.value.trim():'') : sel.value;
 }
+function setBudgetSort(key) {
+  if(budgetSortKey === key) {
+    budgetSortDir *= -1;
+  } else {
+    budgetSortKey = key;
+    budgetSortDir = 1;
+  }
+  renderBudget();
+}
+
+function getBudgetSortIcon(key) {
+  if(budgetSortKey !== key) return '<span class="sort-icon">⇅</span>';
+  return budgetSortDir === 1
+    ? '<span class="sort-icon">▲</span>'
+    : '<span class="sort-icon">▼</span>';
+}
+
 function closeModal(id){document.getElementById(id).classList.remove('show');}
 function showToast(msg,type=''){const el=document.getElementById('toast');document.getElementById('toastMsg').textContent=msg;el.className='toast show'+(type?' '+type:'');setTimeout(()=>el.classList.remove('show'),2500);}
 function copyMyLink(){const token=(user&&user.token)?user.token:'';if(!token){showToast('링크 정보를 찾을 수 없습니다','error');return;}const base=location.origin+location.pathname.replace('dashboard_rc.html','');const url=`${base}dashboard_rc.html?key=${token}`;navigator.clipboard.writeText(url).then(()=>showToast('내 접근 링크가 복사되었습니다','success'));}
